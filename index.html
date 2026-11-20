@@ -473,7 +473,7 @@
         <td>${idx + 1}</td>
         <td style="white-space:nowrap;"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.org)})</td>
         <td style="white-space:nowrap;">${escapeHtml(a.bank)} / ${escapeHtml(a.account)}</td>
-        <td><img src="${a.signature}" style="height:40px; border:1px solid #e2e8f0; border-radius:4px;"></td>
+        <td><img src="${a.signature}" style="height:44px; border:1px solid #e2e8f0; border-radius:4px; background:#fff;"></td>
         <td>
           <div class="btn-row-nowrap">
             ${a.attBlobUrl
@@ -541,15 +541,15 @@
         <table class="doc-table">
           <thead>
             <tr style="height:46px;">
-              <th style="width:10%;">성명</th><th style="width:14%;">소속</th><th style="width:22%;">자택주소</th>
-              <th style="width:15%;">주민번호</th><th style="width:16%;">은행/계좌번호</th><th style="width:9%;">소속기관<br>수령한도</th><th style="width:14%;">서명</th>
+              <th style="width:9%;">성명</th><th style="width:13%;">소속</th><th style="width:21%;">자택주소</th>
+              <th style="width:14%;">주민번호</th><th style="width:16%;">은행/계좌번호</th><th style="width:9%;">소속기관<br>수령한도</th><th style="width:18%;">서명</th>
             </tr>
           </thead>
           <tbody>
-            <tr style="height:68px;">
+            <tr style="height:76px;">
               <td><strong>${escapeHtml(a.name)}</strong></td><td>${escapeHtml(a.org)}</td><td style="text-align:left; font-size:12.5px;">${escapeHtml(a.address)}</td>
               <td>${escapeHtml(a.rrn)}</td><td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td><td>${escapeHtml(a.limit || '-')}</td>
-              <td style="padding:4px;"><img src="${a.signature}" style="max-height:58px; max-width:96px; display:block; margin:0 auto;"></td>
+              <td style="padding:3px;"><img src="${a.signature}" style="max-height:68px; max-width:124px; display:block; margin:0 auto;"></td>
             </tr>
           </tbody>
         </table>
@@ -577,8 +577,8 @@
           <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
-            <span style="position:relative; display:inline-block; width:125px; height:64px; text-align:right; line-height:64px;">
-              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:64px; max-width:125px;">
+            <span style="position:relative; display:inline-block; width:150px; height:74px; text-align:right; line-height:74px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:74px; max-width:150px;">
             </span>
           </div>
         </div>
@@ -641,21 +641,27 @@
 
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
-      const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      const dayName = days[now.getDay()];
+      const ts = `서명일시 : ${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}), ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-      // 출력 시에도 선명하게 인식되도록 워터마크 영역 및 폰트 크기 확대
-      const wmHeight = 56;
+      // 하얀 배경에 회색 톤 큰 폰트로 워터마크 합성
+      const wmHeight = 72;
       const out = document.createElement('canvas');
       out.width = sigCanvas.width;
       out.height = sigCanvas.height + wmHeight;
       const octx = out.getContext('2d');
+
+      // 전체 하얀 배경 채우기
+      octx.fillStyle = '#ffffff';
+      octx.fillRect(0, 0, out.width, out.height);
+
+      // 서명 이미지 복사
       octx.drawImage(sigCanvas, 0, 0);
 
-      // 워터마크 배경 구분선 및 선명한 텍스트 합성
-      octx.fillStyle = 'rgba(241, 245, 249, 0.85)';
-      octx.fillRect(0, sigCanvas.height, out.width, wmHeight);
-      octx.font = '700 36px "Noto Sans KR", sans-serif';
-      octx.fillStyle = '#1e293b';
+      // 워터마크 텍스트 (하얀 배경 + 짙은 회색 톤 + 큰 폰트)
+      octx.font = '700 42px "Noto Sans KR", sans-serif';
+      octx.fillStyle = '#475569';
       octx.textAlign = 'center';
       octx.textBaseline = 'middle';
       octx.fillText(ts, out.width / 2, sigCanvas.height + (wmHeight / 2));
