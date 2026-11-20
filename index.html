@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>평가위원회 전자서명 및 PDF 자동 생성 시스템</title>
-  <script src="ip_config.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -30,6 +29,12 @@
     .btn { width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; }
     .btn:hover { background: #1d4ed8; }
     .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-folder {
+      width: 100%; padding: 12px; background: #eff6ff; color: #1d4ed8; border: 1.5px dashed #2563eb;
+      border-radius: 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.15s;
+    }
+    .btn-folder:hover { background: #dbeafe; }
     .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
     .btn-att { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
     .btn-att:hover { background: #dbeafe; }
@@ -82,6 +87,10 @@
   <div class="card">
     <h2>1. 평가 정보 세팅 및 QR · 접속 링크 생성</h2>
 
+    <button type="button" class="btn-folder" id="selectFolderBtn" onclick="pickLocalFolder()">
+      📁 <span id="folderBtnText">PC 자동 저장 폴더 지정 (클릭하여 폴더 선택)</span>
+    </button>
+
     <div class="fg">
       <label>사업명 (서약서 및 파일명 반영)</label>
       <input type="text" id="cfgProject" value="(예시) 제조 AI 24 플랫폼 구축 정보화전략계획(ISP) 수립 용역">
@@ -103,7 +112,7 @@
 
     <div id="linkSection" class="link-panel hidden">
       <div class="status-pill">🔒 AES-256 + DTLS 이중 암호화 대기 중</div>
-      <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:#0f172a;">📱 평가위원 접속 QR코드 (내부망 와이파이용)</div>
+      <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:#0f172a;">📱 평가위원 접속 QR코드 (스마트폰 · 태블릿용)</div>
       <div class="qr-box">
         <div id="qrcode"></div>
       </div>
@@ -120,8 +129,8 @@
     </div>
 
     <div class="info-box">
-      🔐 <strong>전송 구간 보안:</strong> 평가위원이 입력한 모든 개인정보·서명은 <strong>AES-GCM 256비트 + WebRTC DTLS</strong>로 이중 암호화되어 관리자 PC로만 직접 전송됩니다.<br>
-      📂 <strong>저장 폴더 안내:</strong> 브라우저 <strong>[설정 &gt; 다운로드 &gt; 위치]</strong>를 <code>다운로드\평가위원 참석확인서</code>로 지정해 두시면 PDF 2종이 자동 저장됩니다.
+      📂 <strong>저장 방식:</strong> 상단의 <strong>[PC 자동 저장 폴더 지정]</strong> 버튼으로 폴더를 선택해 두면 다운로드 팝업 없이 해당 폴더에 PDF 2종이 즉시 저장됩니다. (미지정 시 기본 다운로드 폴더 저장)<br>
+      🔐 <strong>보안 안내:</strong> 입력된 개인정보는 외부 서버에 저장되지 않고 <strong>AES-256 + DTLS</strong>로 암호화되어 현재 브라우저로만 직접 수신됩니다.
     </div>
 
     <table>
@@ -206,7 +215,7 @@
   <div id="attendeeDoneArea" class="hidden" style="text-align:center; padding:50px 10px;">
     <div style="font-size:52px; margin-bottom:14px;">✅</div>
     <h2 style="font-size:20px; border:none; margin-bottom:8px;">암호화 전송 및 서명이 완료되었습니다</h2>
-    <p style="font-size:14px; color:#64748b; line-height:1.5;">참석확인서와 평가위원 서약서 PDF가<br>진행석 관리자 시스템으로 안전하게 전송되었습니다.</p>
+    <p style="font-size:14px; color:#64748b; line-height:1.5;">참석확인서와 평가위원 서약서 PDF가<br> 관리자 시스템으로 안전하게 전송되었습니다.</p>
   </div>
 </div>
 
@@ -219,6 +228,7 @@
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const urlCryptoKeyHex = hashParams.get('key');
 
+  let dirHandle = null;
   let peer = null;
   let currentPeerId = '';
   let sessionSecretHex = '';
@@ -286,28 +296,37 @@
     startAttendeeClient(hostPeerId, urlCryptoKeyHex);
   } else {
     document.getElementById('adminView').classList.remove('hidden');
-    const h = window.location.hostname;
-    if (h && h !== 'localhost' && h !== '127.0.0.1') {
-      localStorage.setItem('eval_saved_lan_ip', h);
+  }
+
+  // HTTPS 환경 전용 로컬 저장 폴더 직접 지정 (File System Access API)
+  async function pickLocalFolder() {
+    if (!window.showDirectoryPicker) {
+      alert('현재 브라우저에서는 폴더 직접 지정을 지원하지 않습니다.\n기본 [다운로드] 폴더로 자동 저장됩니다.');
+      return;
+    }
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      document.getElementById('folderBtnText').innerText = `✅ 저장 폴더 지정됨: [${dirHandle.name}]`;
+      document.getElementById('selectFolderBtn').style.borderColor = '#16a34a';
+      document.getElementById('selectFolderBtn').style.background = '#f0fdf4';
+      document.getElementById('selectFolderBtn').style.color = '#15803d';
+    } catch (e) {
+      // 사용자가 폴더 선택 창을 취소한 경우 무시
     }
   }
 
-  function resolveServerHost() {
-    const currentHost = window.location.hostname;
-    if (currentHost && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-      return currentHost;
+  async function savePdfBlob(blob, filename) {
+    if (dirHandle) {
+      try {
+        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (e) {
+        console.warn('지정 폴더 쓰기 실패, 기본 다운로드로 전환:', e);
+      }
     }
-    if (window.SAVED_SERVER_IP && window.SAVED_SERVER_IP !== '127.0.0.1') {
-      return window.SAVED_SERVER_IP;
-    }
-    const cached = localStorage.getItem('eval_saved_lan_ip');
-    if (cached && cached !== '127.0.0.1') {
-      return cached;
-    }
-    return currentHost || 'localhost';
-  }
-
-  function downloadPdfBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -318,11 +337,9 @@
   }
 
   function renderShareLinkAndQr(peerId) {
-    const portPart = window.location.port ? `:${window.location.port}` : '';
-    const pathPart = window.location.pathname || '/index.html';
-    const targetHost = resolveServerHost();
+    const baseUrl = window.location.origin + window.location.pathname;
+    attendeeShareUrl = `${baseUrl}?host=${peerId}#key=${sessionSecretHex}`;
 
-    attendeeShareUrl = `${window.location.protocol}//${targetHost}${portPart}${pathPart}?host=${peerId}#key=${sessionSecretHex}`;
     document.getElementById('linkSection').classList.remove('hidden');
     document.getElementById('shareUrlText').innerText = attendeeShareUrl;
 
@@ -375,12 +392,12 @@
 
               const pledgeRes = await generatePledgePDF(idx);
               attendees[idx].pledgeBlobUrl = pledgeRes.blobUrl;
-              downloadPdfBlob(pledgeRes.blob, pledgeRes.filename);
+              await savePdfBlob(pledgeRes.blob, pledgeRes.filename);
 
               setTimeout(async () => {
                 const attRes = await generateAttendancePDF(idx);
                 attendees[idx].attBlobUrl = attRes.blobUrl;
-                downloadPdfBlob(attRes.blob, attRes.filename);
+                await savePdfBlob(attRes.blob, attRes.filename);
                 renderAttendeeTable();
               }, 600);
             } catch (err) {
@@ -401,33 +418,19 @@
       return;
     }
 
-    let copied = false;
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(attendeeShareUrl);
-        copied = true;
-      } catch (e) {}
-    }
-
-    if (!copied) {
+    try {
+      await navigator.clipboard.writeText(attendeeShareUrl);
+      alert('암호화 접속 URL이 클립보드에 복사되었습니다.');
+    } catch (e) {
       const ta = document.createElement('textarea');
       ta.value = attendeeShareUrl;
       ta.style.position = 'fixed';
       ta.style.left = '-9999px';
-      ta.style.top = '0';
       document.body.appendChild(ta);
-      ta.focus();
       ta.select();
-      try {
-        copied = document.execCommand('copy');
-      } catch (e) {}
+      document.execCommand('copy');
       document.body.removeChild(ta);
-    }
-
-    if (copied) {
       alert('암호화 접속 URL이 클립보드에 복사되었습니다.');
-    } else {
-      window.prompt('아래 주소를 Ctrl+C로 복사해 주세요:', attendeeShareUrl);
     }
   }
 
