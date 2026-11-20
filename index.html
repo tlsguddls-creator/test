@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>평가위원회 전자서명 및 PDF 자동 생성 시스템</title>
+  <script src="ip_config.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans KR', -apple-system, sans-serif; }
+    body { background: #f1f5f9; color: #1e293b; padding: 16px; }
+    .hidden { display: none !important; }
+
+    /* 관리자 화면 레이아웃 */
+    .admin-wrap { max-width: 1260px; margin: 0 auto; display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+    @media (max-width: 960px) { .admin-wrap { grid-template-columns: 1fr; } }
+    .card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow-x: auto; }
+    h2 { font-size: 18px; color: #0f172a; margin-bottom: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+    .fg { margin-bottom: 12px; }
+    label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 4px; }
+    input[type="text"], input[type="tel"], select {
+      width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 10px;
+      font-size: 14.5px; background: #f8fafc; color: #0f172a;
+    }
+    input:focus, select:focus { outline: none; border-color: #2563eb; background: #fff; }
+    .btn { width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; }
+    .btn:hover { background: #1d4ed8; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
+    .btn-att { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .btn-att:hover { background: #dbeafe; }
+    .btn-plg { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+    .btn-plg:hover { background: #dcfce7; }
+
+    /* 버튼 한 줄 가로 정렬 전용 */
+    .btn-row-nowrap { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; white-space: nowrap; }
+
+    /* 접속 링크 + QR 패널 */
+    .link-panel { background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 16px; margin-top: 16px; text-align: center; }
+    .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #dcfce7; color: #166534; margin-bottom: 10px; }
+    .qr-box { display: inline-flex; justify-content: center; align-items: center; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 10px; }
+    .link-box { padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; color: #1d4ed8; font-weight: 600; word-break: break-all; line-height: 1.45; user-select: all; text-align: left; }
+    .btn-copy { width: 100%; padding: 11px; margin-top: 10px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+    .btn-copy:hover { background: #334155; }
+    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; font-size: 12.5px; padding: 12px; border-radius: 10px; margin-bottom: 14px; line-height: 1.65; }
+
+    /* 테이블 */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; vertical-align: middle; }
+    th { background: #f8fafc; color: #475569; font-weight: 700; white-space: nowrap; }
+
+    /* 평가위원 화면 (PC · 모바일 공용) */
+    .attendee-wrap { max-width: 560px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 26px 22px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .sec-title { font-size: 14px; font-weight: 700; color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 8px; margin: 18px 0 12px; }
+    .agree-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 12.5px; color: #475569; line-height: 1.55; }
+    .chk { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; color: #0f172a; margin-top: 8px; cursor: pointer; }
+    .chk input { width: 18px; height: 18px; accent-color: #2563eb; }
+    .row2 { display: grid; grid-template-columns: 125px 1fr; gap: 8px; }
+    .sig-wrap { border: 2px solid #94a3b8; border-radius: 12px; background: #fff; position: relative; touch-action: none; }
+    canvas#sigCanvas { width: 100%; height: 160px; display: block; border-radius: 10px; cursor: crosshair; }
+    .clear-btn { position: absolute; top: 8px; right: 8px; padding: 5px 10px; font-size: 12px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
+    /* 숨겨진 PDF 렌더링 스테이지 */
+    #printStaging { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; color: #000; }
+    .a4-page { width: 794px; min-height: 1122px; padding: 48px 50px; background: #fff; box-sizing: border-box; }
+    .doc-title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 20px; letter-spacing: 1px; }
+    .doc-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 12px; }
+    .doc-table th, .doc-table td { border: 1px solid #000; padding: 6px 5px; text-align: center; vertical-align: middle; }
+    .doc-table th { background: #f3f4f6; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<!-- ======================================================================= -->
+<!-- 1. 관리자 대시보드 화면 (진행석 PC용)                                      -->
+<!-- ======================================================================= -->
+<div id="adminView" class="admin-wrap hidden">
+  <div class="card">
+    <h2>1. 평가 정보 세팅 및 QR · 접속 링크 생성</h2>
+
+    <div class="fg">
+      <label>사업명 (서약서 및 파일명 반영)</label>
+      <input type="text" id="cfgProject" value="(예시) 제조 AI 24 플랫폼 구축 정보화전략계획(ISP) 수립 용역">
+    </div>
+    <div class="fg">
+      <label>위원회명 (참석확인서 반영)</label>
+      <input type="text" id="cfgCommittee" value="(예시) 용역 기술능력평가위원회">
+    </div>
+    <div class="fg">
+      <label>평가일 (서류 및 파일명 반영)</label>
+      <input type="text" id="cfgDate" value="(예시) 2026년 11월 20일">
+    </div>
+    <div class="fg">
+      <label>평가 장소</label>
+      <input type="text" id="cfgLocation" value="(예시) 수도권 평가장">
+    </div>
+
+    <button class="btn" id="initBtn" onclick="initAdminSession()">평가정보 반영 및 QR · 암호화 URL 생성</button>
+
+    <div id="linkSection" class="link-panel hidden">
+      <div class="status-pill">🔒 AES-256 + DTLS 이중 암호화 대기 중</div>
+      <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:#0f172a;">📱 평가위원 접속 QR코드 (내부망 와이파이용)</div>
+      <div class="qr-box">
+        <div id="qrcode"></div>
+      </div>
+      <div style="font-size:13px; font-weight:700; margin:6px 0; color:#0f172a; text-align:left;">🔗 평가위원 접속 URL (PC 메신저 전달용)</div>
+      <div class="link-box" id="shareUrlText"></div>
+      <button type="button" class="btn-copy" onclick="copyShareUrl()">📋 평가위원 접속 URL 복사</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:14px;">
+      <h2 style="border:none; margin:0; padding:0;">2. 실시간 PDF 자동 저장 및 웹 열람·인쇄</h2>
+      <span style="background:#dcfce7; color:#166534; font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px;" id="cntBadge">0명 완료</span>
+    </div>
+
+    <div class="info-box">
+      🔐 <strong>전송 구간 보안:</strong> 평가위원이 입력한 모든 개인정보·서명은 <strong>AES-GCM 256비트 + WebRTC DTLS</strong>로 이중 암호화되어 관리자 PC로만 직접 전송됩니다.<br>
+      📂 <strong>저장 폴더 안내:</strong> 브라우저 <strong>[설정 &gt; 다운로드 &gt; 위치]</strong>를 <code>다운로드\평가위원 참석확인서</code>로 지정해 두시면 PDF 2종이 자동 저장됩니다.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:45px;">순번</th>
+          <th>성명 (소속)</th>
+          <th>은행 / 계좌번호</th>
+          <th>서명</th>
+          <th style="width:310px;">PDF 바로보기 / 인쇄</th>
+        </tr>
+      </thead>
+      <tbody id="attendeeTbody">
+        <tr><td colspan="5" style="text-align:center; padding:30px; color:#94a3b8;">평가정보 반영 후 QR코드 스캔 또는 URL 접속으로 평가위원이 서명하면 실시간으로 표시됩니다.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- 2. 평가위원 입력 및 전자서명 화면 (PC · 모바일 공용)                        -->
+<!-- ======================================================================= -->
+<div id="attendeeView" class="attendee-wrap hidden">
+  <div id="attendeeLoading" style="text-align:center; padding:45px 10px;">
+    <p style="font-size:15px; font-weight:700; color:#2563eb;">진행석 시스템과 암호화 채널을 연결하는 중입니다...</p>
+  </div>
+
+  <div id="attendeeFormArea" class="hidden">
+    <div style="border-bottom:2px solid #2563eb; padding-bottom:12px; margin-bottom:16px;">
+      <div style="display:inline-block; background:#eff6ff; color:#1d4ed8; font-size:11.5px; font-weight:700; padding:3px 8px; border-radius:6px; margin-bottom:6px;">🔒 종단간 암호화(AES-256) 전송 보호 중</div>
+      <h1 style="font-size:20px; color:#0f172a; margin-bottom:6px;">평가위원 참석확인 및 서약서</h1>
+      <p id="mHeaderInfo" style="font-size:13px; color:#475569; line-height:1.55;"></p>
+    </div>
+
+    <form id="evalForm">
+      <div class="sec-title">1. 개인정보 및 고유식별정보 수집·이용 동의</div>
+      <div class="agree-card">
+        <strong>[개인정보 수집·이용]</strong> 자문료(평가수당) 지급을 위해 성명, 계좌번호, 주소를 수집하며 소득세법에 따라 보유 후 파기합니다.
+        <label class="chk"><input type="checkbox" required> 개인정보 수집·이용에 동의합니다. <span style="color:#ef4444;">*</span></label>
+      </div>
+      <div class="agree-card">
+        <strong>[고유식별정보 수집·이용]</strong> 원천징수 및 지급명세서 제출을 위해 주민등록번호를 수집합니다.
+        <label class="chk"><input type="checkbox" required> 고유식별정보(주민번호) 수집·이용에 동의합니다. <span style="color:#ef4444;">*</span></label>
+      </div>
+
+      <div class="sec-title">2. 참석자 인적사항 및 수당 계좌</div>
+      <div class="fg"><label>성명 <span style="color:#ef4444;">*</span></label><input type="text" id="mName" placeholder="홍길동" required></div>
+      <div class="fg"><label>소속 <span style="color:#ef4444;">*</span></label><input type="text" id="mOrg" placeholder="소속 기관/대학/기업명" required></div>
+      <div class="fg"><label>자택주소 <span style="color:#ef4444;">*</span></label><input type="text" id="mAddress" placeholder="시/도 구/군 동 상세주소" required></div>
+      <div class="fg"><label>주민등록번호 <span style="color:#ef4444;">*</span></label><input type="tel" id="mRrn" placeholder="000000-0000000" maxlength="14" required></div>
+      <div class="fg">
+        <label>은행 / 계좌번호 <span style="color:#ef4444;">*</span></label>
+        <div class="row2">
+          <select id="mBank" required>
+            <option value="">은행선택</option>
+            <option>국민은행</option><option>신한은행</option><option>우리은행</option>
+            <option>하나은행</option><option>농협은행</option><option>기업은행</option>
+            <option>카카오뱅크</option><option>토스뱅크</option><option>우체국</option>
+            <option>새마을금고</option><option>신협</option><option>SC제일은행</option>
+            <option>부산은행</option><option>대구은행</option><option>광주은행</option>
+          </select>
+          <input type="tel" id="mAccount" placeholder="계좌번호 숫자만 입력" required>
+        </div>
+      </div>
+      <div class="fg"><label>소속기관 수령한도 (해당 시에만 입력)</label><input type="text" id="mLimit" placeholder="기정원 지급기준보다 낮은 경우 금액 기재"></div>
+
+      <div class="sec-title">3. 평가위원 위촉승낙 서약 및 전자서명</div>
+      <div class="agree-card" id="mPledgeSummary"></div>
+
+      <div class="fg">
+        <label>전자서명 (아래 칸에 마우스 또는 터치로 서명해 주세요) <span style="color:#ef4444;">*</span></label>
+        <div class="sig-wrap">
+          <canvas id="sigCanvas"></canvas>
+          <button type="button" class="clear-btn" onclick="clearSig()">지우기</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="mSubmitBtn">암호화하여 입력 및 서명 전송</button>
+    </form>
+  </div>
+
+  <div id="attendeeDoneArea" class="hidden" style="text-align:center; padding:50px 10px;">
+    <div style="font-size:52px; margin-bottom:14px;">✅</div>
+    <h2 style="font-size:20px; border:none; margin-bottom:8px;">암호화 전송 및 서명이 완료되었습니다</h2>
+    <p style="font-size:14px; color:#64748b; line-height:1.5;">참석확인서와 평가위원 서약서 PDF가<br>진행석 관리자 시스템으로 안전하게 전송되었습니다.</p>
+  </div>
+</div>
+
+<!-- 숨김 PDF 렌더링 스테이지 -->
+<div id="printStaging"></div>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const hostPeerId = urlParams.get('host');
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const urlCryptoKeyHex = hashParams.get('key');
+
+  let peer = null;
+  let currentPeerId = '';
+  let sessionSecretHex = '';
+  let attendeeShareUrl = '';
+  let evalConfig = {};
+  let attendees = [];
+  let isGeneratingPdf = false;
+
+  // =========================================================================
+  // AES-GCM 256비트 종단간 암호화 / 복호화 모듈 (Web Crypto API)
+  // =========================================================================
+  function generateRandomHexKey() {
+    const bytes = new Uint8Array(32); // 256-bit
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function importAesKey(hexKey) {
+    const raw = new Uint8Array(hexKey.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    return await window.crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  }
+
+  async function encryptPayload(obj, hexKey) {
+    if (!window.crypto || !window.crypto.subtle || !hexKey) {
+      return { encrypted: false, raw: obj };
+    }
+    const key = await importAesKey(hexKey);
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(JSON.stringify(obj));
+    const cipherBuf = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+
+    const toB64 = (buf) => {
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    };
+    return {
+      encrypted: true,
+      iv: toB64(iv),
+      ciphertext: toB64(cipherBuf)
+    };
+  }
+
+  async function decryptPayload(packet, hexKey) {
+    if (!packet.encrypted) return packet.raw;
+    const key = await importAesKey(hexKey);
+    const fromB64 = (b64) => {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    };
+    const iv = fromB64(packet.iv);
+    const ciphertext = fromB64(packet.ciphertext);
+    const plainBuf = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return JSON.parse(new TextDecoder().decode(plainBuf));
+  }
+
+  // =========================================================================
+  // 진입점 분기
+  // =========================================================================
+  if (hostPeerId) {
+    document.getElementById('attendeeView').classList.remove('hidden');
+    startAttendeeClient(hostPeerId, urlCryptoKeyHex);
+  } else {
+    document.getElementById('adminView').classList.remove('hidden');
+    const h = window.location.hostname;
+    if (h && h !== 'localhost' && h !== '127.0.0.1') {
+      localStorage.setItem('eval_saved_lan_ip', h);
+    }
+  }
+
+  function resolveServerHost() {
+    const currentHost = window.location.hostname;
+    if (currentHost && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+      return currentHost;
+    }
+    if (window.SAVED_SERVER_IP && window.SAVED_SERVER_IP !== '127.0.0.1') {
+      return window.SAVED_SERVER_IP;
+    }
+    const cached = localStorage.getItem('eval_saved_lan_ip');
+    if (cached && cached !== '127.0.0.1') {
+      return cached;
+    }
+    return currentHost || 'localhost';
+  }
+
+  function downloadPdfBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function renderShareLinkAndQr(peerId) {
+    const portPart = window.location.port ? `:${window.location.port}` : '';
+    const pathPart = window.location.pathname || '/index.html';
+    const targetHost = resolveServerHost();
+
+    attendeeShareUrl = `${window.location.protocol}//${targetHost}${portPart}${pathPart}?host=${peerId}#key=${sessionSecretHex}`;
+    document.getElementById('linkSection').classList.remove('hidden');
+    document.getElementById('shareUrlText').innerText = attendeeShareUrl;
+
+    const qrContainer = document.getElementById('qrcode');
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+      text: attendeeShareUrl,
+      width: 190,
+      height: 190,
+      colorDark: '#0f172a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
+
+  function initAdminSession() {
+    evalConfig = {
+      project: document.getElementById('cfgProject').value.trim(),
+      committee: document.getElementById('cfgCommittee').value.trim(),
+      date: document.getElementById('cfgDate').value.trim(),
+      location: document.getElementById('cfgLocation').value.trim()
+    };
+
+    if (!sessionSecretHex) {
+      sessionSecretHex = generateRandomHexKey();
+    }
+
+    if (!peer) {
+      peer = new Peer();
+      peer.on('open', (id) => {
+        currentPeerId = id;
+        renderShareLinkAndQr(id);
+      });
+
+      peer.on('connection', (conn) => {
+        conn.on('open', () => {
+          conn.send({ type: 'CONFIG', config: evalConfig });
+        });
+
+        conn.on('data', async (payload) => {
+          if (payload.type === 'SUBMIT_ENC') {
+            try {
+              const att = await decryptPayload(payload.packet, sessionSecretHex);
+              att.attBlobUrl = '';
+              att.pledgeBlobUrl = '';
+              attendees.push(att);
+              const idx = attendees.length - 1;
+              renderAttendeeTable();
+              conn.send({ type: 'ACK' });
+
+              const pledgeRes = await generatePledgePDF(idx);
+              attendees[idx].pledgeBlobUrl = pledgeRes.blobUrl;
+              downloadPdfBlob(pledgeRes.blob, pledgeRes.filename);
+
+              setTimeout(async () => {
+                const attRes = await generateAttendancePDF(idx);
+                attendees[idx].attBlobUrl = attRes.blobUrl;
+                downloadPdfBlob(attRes.blob, attRes.filename);
+                renderAttendeeTable();
+              }, 600);
+            } catch (err) {
+              alert('수신 데이터 복호화 오류가 발생했습니다. 최신 QR코드 또는 접속 URL인지 확인해 주세요.');
+            }
+          }
+        });
+      });
+    } else {
+      if (currentPeerId) renderShareLinkAndQr(currentPeerId);
+      alert('평가정보 및 QR코드·암호화 접속 URL이 업데이트되었습니다.');
+    }
+  }
+
+  async function copyShareUrl() {
+    if (!attendeeShareUrl) {
+      alert('먼저 [평가정보 반영 및 QR · 암호화 URL 생성]을 눌러 주세요.');
+      return;
+    }
+
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(attendeeShareUrl);
+        copied = true;
+      } catch (e) {}
+    }
+
+    if (!copied) {
+      const ta = document.createElement('textarea');
+      ta.value = attendeeShareUrl;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        copied = document.execCommand('copy');
+      } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    if (copied) {
+      alert('암호화 접속 URL이 클립보드에 복사되었습니다.');
+    } else {
+      window.prompt('아래 주소를 Ctrl+C로 복사해 주세요:', attendeeShareUrl);
+    }
+  }
+
+  function renderAttendeeTable() {
+    document.getElementById('cntBadge').innerText = `${attendees.length}명 완료`;
+    const tbody = document.getElementById('attendeeTbody');
+    tbody.innerHTML = attendees.map((a, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td style="white-space:nowrap;"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.org)})</td>
+        <td style="white-space:nowrap;">${escapeHtml(a.bank)} / ${escapeHtml(a.account)}</td>
+        <td><img src="${a.signature}" style="height:34px; border:1px solid #e2e8f0; border-radius:4px;"></td>
+        <td>
+          <div class="btn-row-nowrap">
+            ${a.attBlobUrl
+              ? `<a href="${a.attBlobUrl}" target="_blank" class="btn-sm btn-att">📄 참석확인서 열기/인쇄</a>`
+              : `<span style="font-size:12px; color:#64748b;">생성 중...</span>`}
+            ${a.pledgeBlobUrl
+              ? `<a href="${a.pledgeBlobUrl}" target="_blank" class="btn-sm btn-plg">📄 서약서·행동강령 열기/인쇄</a>`
+              : ``}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function buildCustomFileName(prefix, attendee) {
+    const clean = (str) => String(str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+    return `(${prefix})${clean(evalConfig.project)}_${clean(evalConfig.date)}_${clean(attendee.name)}(${clean(attendee.org)}).pdf`;
+  }
+
+  async function renderElementsToBlob(elementIds) {
+    while (isGeneratingPdf) await new Promise(r => setTimeout(r, 150));
+    isGeneratingPdf = true;
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      for (let i = 0; i < elementIds.length; i++) {
+        const el = document.getElementById(elementIds[i]);
+        const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+      }
+      const blob = pdf.output('blob');
+      return { blob, blobUrl: URL.createObjectURL(blob) };
+    } finally {
+      isGeneratingPdf = false;
+    }
+  }
+
+  async function generateAttendancePDF(index) {
+    const a = attendees[index];
+    const staging = document.getElementById('printStaging');
+    staging.innerHTML = `
+      <div class="a4-page" id="attTarget">
+        <div class="doc-title">개인정보 수집ㆍ이용 동의서</div>
+        <div style="font-size:13.5px; font-weight:700; line-height:1.8; margin-bottom:10px;">
+          □ 위원회명 : ${escapeHtml(evalConfig.committee)}<br>□ 일&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;자 : ${escapeHtml(evalConfig.date)}
+        </div>
+        <table class="doc-table" style="margin-bottom:14px;">
+          <tr><th style="width:50%; padding:8px;">개인정보 수집ㆍ이용</th><th style="width:50%; padding:8px;">고유식별정보 수집·이용</th></tr>
+          <tr>
+            <td style="text-align:left; vertical-align:top; padding:10px; line-height:1.65; font-size:11.5px;">
+              ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 성명, 은행 계좌번호, 주소<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
+              개인정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
+              <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+            </td>
+            <td style="text-align:left; vertical-align:top; padding:10px; line-height:1.65; font-size:11.5px;">
+              ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 주민등록번호<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
+              고유식별정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
+              <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+            </td>
+          </tr>
+        </table>
+        <div style="font-size:13.5px; font-weight:700; margin-bottom:4px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
+        <div style="font-size:10.5px; color:#333; margin-bottom:12px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
+        <table class="doc-table">
+          <thead>
+            <tr style="height:42px;">
+              <th style="width:10%;">성명</th><th style="width:14%;">소속</th><th style="width:23%;">자택주소</th>
+              <th style="width:15%;">주민번호</th><th style="width:16%;">은행/계좌번호</th><th style="width:10%;">소속기관<br>수령한도</th><th style="width:12%;">서명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="height:58px;">
+              <td><strong>${escapeHtml(a.name)}</strong></td><td>${escapeHtml(a.org)}</td><td style="text-align:left; font-size:11px;">${escapeHtml(a.address)}</td>
+              <td>${escapeHtml(a.rrn)}</td><td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td><td>${escapeHtml(a.limit || '-')}</td>
+              <td><img src="${a.signature}" style="max-height:48px; max-width:76px;"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:11px; margin-top:10px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
+      </div>`;
+    const res = await renderElementsToBlob(['attTarget']);
+    return { ...res, filename: buildCustomFileName('참석확인서', a) };
+  }
+
+  async function generatePledgePDF(index) {
+    const a = attendees[index];
+    const staging = document.getElementById('printStaging');
+    staging.innerHTML = `
+      <div class="a4-page" id="plg1" style="padding:70px 60px;">
+        <div class="doc-title" style="font-size:24px; margin-bottom:34px;">평가위원 위촉승낙 및 서약서</div>
+        <div style="font-size:15px; line-height:1.9; margin-bottom:24px;">본인은 「<strong>${escapeHtml(evalConfig.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며 아래 사항에 서약합니다.</div>
+        <div style="font-size:14.5px; line-height:1.95; padding-left:10px;">
+          <p style="margin-bottom:14px;">1. 본인은 「${escapeHtml(evalConfig.project)}」 기술능력 평가위원회 위원으로 위촉된 이후, 위원회 활동과 관련하여 알게 된 사업의 중요사항을 제3자에게 누설하지 않는다.</p>
+          <p style="margin-bottom:14px;">2. 만약 실수로 인하여 기밀을 누설함으로써 위 용역사업에 손해를 끼친 경우에는 이의 없이 충분히 배상한다.</p>
+          <p style="margin-bottom:14px;">3. 본인은 개인의 이해관계와 관계없이 엄중 독립된 입장에서 평가위원회 위원의 역할을 성실히 수행한다.</p>
+          <p style="margin-bottom:14px;">4. 본인은 본 서약 내용의 확실한 준수를 약속하고 만약 이것을 위반했을 시에는 손해 배상은 물론이고, 관련 규정에 의거한 여하의 조치도 감수한다.</p>
+        </div>
+        <div style="text-align:center; font-size:15px; margin-top:46px; margin-bottom:34px;">${escapeHtml(evalConfig.date)}</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; font-size:15px; line-height:2.2; padding-right:20px;">
+          <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
+            <span style="position:relative; display:inline-block; width:95px; height:50px; text-align:right; line-height:50px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:50px; max-width:95px;">
+            </span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:20px; font-weight:700; margin-top:60px; letter-spacing:2px;">중소기업기술정보진흥원장 귀하</div>
+      </div>
+      <div class="a4-page" id="plg2" style="padding:70px 60px;">
+        <div class="doc-title" style="font-size:24px; margin-bottom:30px;">평가위원 행동요령</div>
+        <div style="font-size:14.5px; line-height:1.85; margin-bottom:22px;">평가위원회의 공정성과 신뢰성을 담보하고 피평가자가 존중받는 문화를 조성하기 위하여 아래의 사항을 반드시 준수하여 주시기 바랍니다.</div>
+        <div style="font-size:14px; line-height:1.9; padding-left:8px;">
+          <p style="margin-bottom:14px;">1. (회의예절) 회의 중 휴대전화 벨소리를 진동으로 하고 빈번한 이석을 삼가해 주시며, 질문시간을 준수하여 다른 위원님이 발언할 수 있도록 형평을 기하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">2. (정중한 대우) 피평가자(발표자)의 인격과 자존심이 손상되지 않도록 정중하면서도 정확하게 질의하며, 피평가자가 무시 또는 비난을 당하거나 취조당하는 느낌을 갖지 않도록 배려하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">3. (표현기회제공) 피평가자에게 가급적 의사 표현의 기회가 제공될 수 있도록 하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">4. (창의성 존중) 피평가자와 다른 의견을 제시할 경우 창의성이 존중되도록 논리적으로 설명하며, 피평가자와의 논쟁, 평가결과에 영향을 미치는 과도한 발언 및 개인적인 질문 등은 삼가주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">5. (비밀의 유지) 평가과정에서 알게 된 내용은 임의로 사용 또는 공개하지 않아야 하며, 평가결과에 대해서는 비밀을 유지하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">6. (공정성 확보) 평가과제 중 자신과 이해관계에 있는 과제 등에 대해서는 평가가 불가함을 간사에게 알려 주시기 바랍니다.</p>
+        </div>
+      </div>`;
+    const res = await renderElementsToBlob(['plg1', 'plg2']);
+    return { ...res, filename: buildCustomFileName('서약서', a) };
+  }
+
+  let adminConn = null;
+
+  function startAttendeeClient(targetHostId, secretHex) {
+    peer = new Peer();
+    peer.on('open', () => {
+      adminConn = peer.connect(targetHostId);
+      adminConn.on('data', (msg) => {
+        if (msg.type === 'CONFIG') {
+          const c = msg.config;
+          document.getElementById('mHeaderInfo').innerHTML = `<strong>위원회:</strong> ${escapeHtml(c.committee)}<br><strong>일시/장소:</strong> ${escapeHtml(c.date)} / ${escapeHtml(c.location)}`;
+          document.getElementById('mPledgeSummary').innerHTML = `본인은 「<strong>${escapeHtml(c.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며, 기밀 유지·공정성 확보·행동요령 준수를 서약합니다.<label class="chk"><input type="checkbox" required> 위촉승낙 서약서 및 행동요령에 동의합니다. <span style="color:#ef4444;">*</span></label>`;
+          document.getElementById('attendeeLoading').classList.add('hidden');
+          document.getElementById('attendeeFormArea').classList.remove('hidden');
+          resizeSigCanvas();
+        } else if (msg.type === 'ACK') {
+          document.getElementById('attendeeFormArea').classList.add('hidden');
+          document.getElementById('attendeeDoneArea').classList.remove('hidden');
+        }
+      });
+    });
+
+    document.getElementById('mRrn').addEventListener('input', e => {
+      let v = e.target.value.replace(/[^0-9]/g, '');
+      e.target.value = v.length > 6 ? v.slice(0, 6) + '-' + v.slice(6, 13) : v;
+    });
+
+    document.getElementById('evalForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!hasSigned) { alert('서명란에 서명을 입력해 주세요.'); return; }
+      const btn = document.getElementById('mSubmitBtn');
+      btn.disabled = true;
+      btn.innerText = 'AES-256 암호화 및 전송 중...';
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+      const out = document.createElement('canvas');
+      out.width = sigCanvas.width;
+      out.height = sigCanvas.height + 34;
+      const octx = out.getContext('2d');
+      octx.drawImage(sigCanvas, 0, 0);
+      octx.font = '600 20px "Noto Sans KR", sans-serif';
+      octx.fillStyle = 'rgba(71, 85, 105, 0.72)';
+      octx.textAlign = 'center';
+      octx.textBaseline = 'bottom';
+      octx.fillText(ts, out.width / 2, out.height - 4);
+
+      const rawData = {
+        name: document.getElementById('mName').value.trim(),
+        org: document.getElementById('mOrg').value.trim(),
+        address: document.getElementById('mAddress').value.trim(),
+        rrn: document.getElementById('mRrn').value.trim(),
+        bank: document.getElementById('mBank').value,
+        account: document.getElementById('mAccount').value.trim(),
+        limit: document.getElementById('mLimit').value.trim(),
+        signature: out.toDataURL('image/png')
+      };
+
+      const encryptedPacket = await encryptPayload(rawData, secretHex);
+      adminConn.send({ type: 'SUBMIT_ENC', packet: encryptedPacket });
+    });
+  }
+
+  const sigCanvas = document.getElementById('sigCanvas');
+  const sigCtx = sigCanvas.getContext('2d');
+  let isDrawing = false, hasSigned = false;
+
+  function resizeSigCanvas() {
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    sigCanvas.width = sigCanvas.offsetWidth * ratio;
+    sigCanvas.height = sigCanvas.offsetHeight * ratio;
+    sigCtx.scale(ratio, ratio);
+    sigCtx.lineWidth = 2.5;
+    sigCtx.lineCap = 'round';
+    sigCtx.strokeStyle = '#0f172a';
+  }
+  function getSigPos(e) {
+    const r = sigCanvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: cx - r.left, y: cy - r.top };
+  }
+  sigCanvas.addEventListener('mousedown', e => { isDrawing = true; hasSigned = true; const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+  sigCanvas.addEventListener('mousemove', e => { if (!isDrawing) return; const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+  window.addEventListener('mouseup', () => isDrawing = false);
+  sigCanvas.addEventListener('touchstart', e => { isDrawing = true; hasSigned = true; const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
+  sigCanvas.addEventListener('touchmove', e => { if (!isDrawing) return; e.preventDefault(); const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); }, { passive: false });
+  sigCanvas.addEventListener('touchend', () => isDrawing = false);
+  function clearSig() { sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height); hasSigned = false; }
+  function escapeHtml(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+</script>
+</body>
+</html>
