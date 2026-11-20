@@ -89,7 +89,7 @@
     canvas#sigCanvas { width: 100%; height: 175px; display: block; border-radius: 10px; cursor: crosshair; }
     .clear-btn { position: absolute; top: 10px; right: 10px; padding: 6px 12px; font-size: 14px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 
-    /* 숨겨진 PDF 렌더링 스테이지 (절대 좌표 0,0 고정 + 화면 밖 배치로 잘림 방지) */
+    /* 숨겨진 PDF 렌더링 스테이지 */
     #printStaging {
       position: absolute;
       left: 0;
@@ -216,6 +216,8 @@
 <div id="attendeeView" class="attendee-wrap hidden">
   <div id="attendeeLoading" style="text-align:center; padding:50px 10px;">
     <p id="loadingMsg" style="font-size:17px; font-weight:700; color:#2563eb;">간사 시스템과 암호화 채널을 연결하는 중입니다...</p>
+    <p id="loadingSubMsg" style="font-size:13.5px; color:#64748b; margin-top:10px; line-height:1.5;">5초 이상 지연될 경우 사내 방화벽 차단일 수 있으니 스마트폰 LTE/5G로 전환해 접속해 주세요.</p>
+    <button type="button" id="retryConnBtn" class="btn hidden" style="max-width:220px; margin:16px auto 0;" onclick="retryAttendeeConnect()">🔄 다시 연결 시도</button>
   </div>
 
   <div id="attendeeFormArea" class="hidden">
@@ -295,6 +297,18 @@
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const urlCryptoKeyHex = hashParams.get('key');
 
+  // 다중 STUN 서버 설정으로 방화벽/NAT 환경 연결 안정성 향상
+  const PEER_OPTIONS = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+      ]
+    }
+  };
+
   let dirHandle = null;
   let peer = null;
   let adminConn = null;
@@ -304,6 +318,7 @@
   let evalConfig = {};
   let attendees = [];
   let isGeneratingPdf = false;
+  let connTimer = null;
 
   // =========================================================================
   // 평가일 자동 정규화 함수: 어떤 형식으로 입력해도 0000-00-00(요일)로 변환
@@ -496,10 +511,14 @@
     }
 
     if (!peer) {
-      peer = new Peer();
+      peer = new Peer(PEER_OPTIONS);
       peer.on('open', (id) => {
         currentPeerId = id;
         renderShareLinkAndQr(id);
+      });
+
+      peer.on('disconnected', () => {
+        if (peer && !peer.destroyed) peer.reconnect();
       });
 
       peer.on('connection', (conn) => {
@@ -508,7 +527,9 @@
         });
 
         conn.on('data', async (payload) => {
-          if (payload.type === 'SUBMIT_ENC') {
+          if (payload.type === 'REQ_CONFIG') {
+            conn.send({ type: 'CONFIG', config: evalConfig });
+          } else if (payload.type === 'SUBMIT_ENC') {
             try {
               const att = await decryptPayload(payload.packet, sessionSecretHex);
               att.attBlobUrl = '';
@@ -823,12 +844,32 @@
     return { ...res, filename: buildCustomFileName('서약서', a) };
   }
 
+  function retryAttendeeConnect() {
+    document.getElementById('retryConnBtn').classList.add('hidden');
+    document.getElementById('loadingMsg').innerText = '간사 시스템과 암호화 채널을 다시 연결하는 중입니다...';
+    if (peer) {
+      try { peer.destroy(); } catch (e) {}
+    }
+    startAttendeeClient(hostPeerId, urlCryptoKeyHex);
+  }
+
   function startAttendeeClient(targetHostId, secretHex) {
-    peer = new Peer();
+    clearTimeout(connTimer);
+    connTimer = setTimeout(() => {
+      document.getElementById('retryConnBtn').classList.remove('hidden');
+    }, 6000);
+
+    peer = new Peer(PEER_OPTIONS);
     peer.on('open', () => {
-      adminConn = peer.connect(targetHostId);
+      adminConn = peer.connect(targetHostId, { reliable: true });
+
+      adminConn.on('open', () => {
+        adminConn.send({ type: 'REQ_CONFIG' });
+      });
+
       adminConn.on('data', (msg) => {
         if (msg.type === 'CONFIG') {
+          clearTimeout(connTimer);
           const c = msg.config;
           document.getElementById('mHeaderInfo').innerHTML = `<strong>위원회:</strong> ${escapeHtml(c.committee)}<br><strong>일시/장소:</strong> ${escapeHtml(c.date)} / ${escapeHtml(c.location)}`;
           document.getElementById('mPledgeSummary').innerHTML = `본인은 「<strong>${escapeHtml(c.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며, 기밀 유지·공정성 확보·행동요령 준수를 서약합니다.<label class="chk"><input type="checkbox" required> 위촉승낙 서약서 및 행동요령에 동의합니다. <span style="color:#ef4444;">*</span></label>`;
@@ -843,11 +884,17 @@
 
       adminConn.on('error', () => {
         document.getElementById('loadingMsg').innerText = '간사 시스템과 연결하지 못했습니다. 최신 QR코드 또는 URL인지 확인해 주세요.';
+        document.getElementById('retryConnBtn').classList.remove('hidden');
       });
     });
 
-    peer.on('error', () => {
-      document.getElementById('loadingMsg').innerText = '연결 세션이 만료되었거나 유효하지 않은 주소입니다. 간사에게 새 링크를 요청해 주세요.';
+    peer.on('error', (err) => {
+      if (err && err.type === 'peer-unavailable') {
+        document.getElementById('loadingMsg').innerText = '간사 세션이 종료되었거나 만료된 QR/URL입니다. 간사 화면에서 새로 생성된 링크로 접속해 주세요.';
+      } else {
+        document.getElementById('loadingMsg').innerText = '네트워크 보안 정책으로 연결이 지연되고 있습니다. 모바일 데이터(LTE/5G)로 전환 후 재시도해 주세요.';
+      }
+      document.getElementById('retryConnBtn').classList.remove('hidden');
     });
 
     document.getElementById('mRrn').addEventListener('input', e => {
