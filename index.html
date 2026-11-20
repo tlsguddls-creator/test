@@ -89,11 +89,38 @@
     canvas#sigCanvas { width: 100%; height: 175px; display: block; border-radius: 10px; cursor: crosshair; }
     .clear-btn { position: absolute; top: 10px; right: 10px; padding: 6px 12px; font-size: 14px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 
-    /* 숨겨진 PDF 렌더링 스테이지 */
-    #printStaging { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; color: #000; }
-    .a4-page { width: 794px; min-height: 1122px; padding: 44px 48px; background: #fff; box-sizing: border-box; }
-    .doc-title { text-align: center; font-size: 25px; font-weight: 700; text-decoration: underline; margin-bottom: 20px; letter-spacing: 1px; }
-    .doc-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 14px; }
+    /* 숨겨진 PDF 렌더링 스테이지 (절대 좌표 0,0 고정 + 화면 밖 배치로 잘림 방지) */
+    #printStaging {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 794px;
+      background: #fff;
+      color: #000;
+      z-index: -9999;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .a4-page {
+      width: 794px;
+      height: 1122px;
+      padding: 46px 46px;
+      background: #fff;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .doc-title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 6px;
+      padding-top: 6px;
+      line-height: 1.4;
+      margin-bottom: 20px;
+      letter-spacing: 1px;
+    }
+    .doc-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 13.5px; table-layout: fixed; word-break: keep-all; }
     .doc-table th, .doc-table td { border: 1px solid #000; padding: 8px 6px; text-align: center; vertical-align: middle; }
     .doc-table th { background: #f3f4f6; font-weight: 700; }
   </style>
@@ -323,7 +350,7 @@
   // AES-GCM 256비트 종단간 암호화 / 복호화 모듈 (Web Crypto API)
   // =========================================================================
   function generateRandomHexKey() {
-    const bytes = new Uint8Array(32); // 256-bit
+    const bytes = new Uint8Array(32);
     window.crypto.getRandomValues(bytes);
     return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   }
@@ -381,7 +408,6 @@
     applyNormalizedDate();
   }
 
-  // 평가위원 창 종료 처리
   function closeAttendeeWindow() {
     if (adminConn) {
       try { adminConn.close(); } catch (e) {}
@@ -400,7 +426,6 @@
     }, 250);
   }
 
-  // HTTPS 환경 전용 로컬 저장 폴더 직접 지정 (File System Access API)
   async function pickLocalFolder() {
     if (!window.showDirectoryPicker) {
       alert('현재 브라우저에서는 폴더 직접 지정을 지원하지 않습니다.\n기본 [다운로드] 폴더로 자동 저장됩니다.');
@@ -537,7 +562,6 @@
     }
   }
 
-  // 서류확인 버튼: 참석확인서 + 서약서 PDF 2종 동시 열람 및 저장 위치 안내
   function openAttendeeDocs(idx) {
     const a = attendees[idx];
     if (!a) return;
@@ -560,7 +584,6 @@
       badge.style.color = '#1d4ed8';
     }
 
-    // 1명 이상 접수되면 엑셀 출력 버튼 활성화
     excelBtn.disabled = attendees.length === 0;
 
     const tbody = document.getElementById('attendeeTbody');
@@ -627,20 +650,20 @@
 
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-      { wch: 6 },  // 순번
-      { wch: 34 }, // 사업명
-      { wch: 24 }, // 위원회명
-      { wch: 16 }, // 평가일
-      { wch: 16 }, // 평가장소
-      { wch: 12 }, // 이름
-      { wch: 22 }, // 소속
-      { wch: 36 }, // 자택주소
-      { wch: 18 }, // 주민번호
-      { wch: 14 }, // 은행명
-      { wch: 20 }, // 계좌번호
-      { wch: 18 }, // 수령한도
-      { wch: 12 }, // 서명여부
-      { wch: 24 }  // 서명일시
+      { wch: 6 },
+      { wch: 34 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 22 },
+      { wch: 36 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 24 }
     ];
 
     const wb = XLSX.utils.book_new();
@@ -661,54 +684,69 @@
     return `(${prefix})${clean(evalConfig.project)}_${clean(evalConfig.date)}_${clean(attendee.name)}(${clean(attendee.org)}).pdf`;
   }
 
+  // =========================================================================
+  // PDF 렌더링 (A4 전체 영역 794x1122px 고정 캡처 - 잘림 방지)
+  // =========================================================================
   async function renderElementsToBlob(elementIds) {
     while (isGeneratingPdf) await new Promise(r => setTimeout(r, 150));
     isGeneratingPdf = true;
+    const staging = document.getElementById('printStaging');
     try {
+      staging.style.opacity = '1';
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
       for (let i = 0; i < elementIds.length; i++) {
         const el = document.getElementById(elementIds[i]);
-        const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          width: 794,
+          height: 1122,
+          windowWidth: 794,
+          windowHeight: 1122,
+          x: 0,
+          y: 0,
+          scrollX: 0,
+          scrollY: 0
+        });
         if (i > 0) pdf.addPage();
         pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
       }
       const blob = pdf.output('blob');
       return { blob, blobUrl: URL.createObjectURL(blob) };
     } finally {
+      staging.style.opacity = '0';
       isGeneratingPdf = false;
     }
   }
 
-  // =========================================================================
-  // 참석확인서 PDF (2단 인적사항 표 구조: 1행 성명/소속/주소, 2행 주민번호/계좌/수령한도/서명)
-  // =========================================================================
   async function generateAttendancePDF(index) {
     const a = attendees[index];
     const staging = document.getElementById('printStaging');
     staging.innerHTML = `
       <div class="a4-page" id="attTarget">
         <div class="doc-title">개인정보 수집ㆍ이용 동의서</div>
-        <div style="font-size:15.5px; font-weight:700; line-height:1.85; margin-bottom:10px;">
+        <div style="font-size:15px; font-weight:700; line-height:1.8; margin-bottom:10px;">
           □ 위원회명 : ${escapeHtml(evalConfig.committee)}<br>□ 일&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;자 : ${escapeHtml(evalConfig.date)}
         </div>
         <table class="doc-table" style="margin-bottom:14px;">
           <tr><th style="width:50%; padding:8px;">개인정보 수집ㆍ이용</th><th style="width:50%; padding:8px;">고유식별정보 수집·이용</th></tr>
           <tr>
-            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:13px;">
+            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:12.5px;">
               ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 성명, 은행 계좌번호, 주소<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
               개인정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
               <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
             </td>
-            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:13px;">
+            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:12.5px;">
               ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 주민등록번호<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
               고유식별정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
               <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
             </td>
           </tr>
         </table>
-        <div style="font-size:15.5px; font-weight:700; margin-bottom:4px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
-        <div style="font-size:12px; color:#333; margin-bottom:12px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
+        <div style="font-size:15px; font-weight:700; margin-bottom:4px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
+        <div style="font-size:11.5px; color:#333; margin-bottom:12px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
 
         <!-- 2단 구성 참석자 인적사항 및 서명 표 -->
         <table class="doc-table">
@@ -717,7 +755,7 @@
             <th style="width:27%;">소&nbsp;&nbsp;&nbsp;속</th>
             <th colspan="2" style="width:55%;">자&nbsp;택&nbsp;주&nbsp;소</th>
           </tr>
-          <tr style="height:44px; font-size:14.5px;">
+          <tr style="height:44px; font-size:14px;">
             <td><strong>${escapeHtml(a.name)}</strong></td>
             <td>${escapeHtml(a.org)}</td>
             <td colspan="2" style="text-align:left; padding-left:12px;">${escapeHtml(a.address)}</td>
@@ -728,17 +766,17 @@
             <th style="width:19%;">소속기관<br>수령한도</th>
             <th style="width:36%;">서&nbsp;&nbsp;&nbsp;명</th>
           </tr>
-          <tr style="height:105px; font-size:14.5px;">
+          <tr style="height:105px; font-size:14px;">
             <td>${escapeHtml(a.rrn)}</td>
             <td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td>
             <td>${escapeHtml(a.limit || '-')}</td>
             <td style="padding:4px; background:#fff;">
-              <img src="${a.signature}" style="max-height:94px; max-width:240px; display:block; margin:0 auto;">
+              <img src="${a.signature}" style="max-height:94px; max-width:230px; display:block; margin:0 auto;">
             </td>
           </tr>
         </table>
 
-        <div style="font-size:12.5px; margin-top:10px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
+        <div style="font-size:12px; margin-top:10px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
       </div>`;
     const res = await renderElementsToBlob(['attTarget']);
     return { ...res, filename: buildCustomFileName('참석확인서', a) };
@@ -748,37 +786,37 @@
     const a = attendees[index];
     const staging = document.getElementById('printStaging');
     staging.innerHTML = `
-      <div class="a4-page" id="plg1" style="padding:66px 56px;">
-        <div class="doc-title" style="font-size:27px; margin-bottom:36px;">평가위원 위촉승낙 및 서약서</div>
-        <div style="font-size:17px; line-height:1.95; margin-bottom:26px;">본인은 「<strong>${escapeHtml(evalConfig.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며 아래 사항에 서약합니다.</div>
-        <div style="font-size:16.5px; line-height:2.0; padding-left:10px;">
-          <p style="margin-bottom:16px;">1. 본인은 「${escapeHtml(evalConfig.project)}」 기술능력 평가위원회 위원으로 위촉된 이후, 위원회 활동과 관련하여 알게 된 사업의 중요사항을 제3자에게 누설하지 않는다.</p>
-          <p style="margin-bottom:16px;">2. 만약 실수로 인하여 기밀을 누설함으로써 위 용역사업에 손해를 끼친 경우에는 이의 없이 충분히 배상한다.</p>
-          <p style="margin-bottom:16px;">3. 본인은 개인의 이해관계와 관계없이 엄중 독립된 입장에서 평가위원회 위원의 역할을 성실히 수행한다.</p>
-          <p style="margin-bottom:16px;">4. 본인은 본 서약 내용의 확실한 준수를 약속하고 만약 이것을 위반했을 시에는 손해 배상은 물론이고, 관련 규정에 의거한 여하의 조치도 감수한다.</p>
+      <div class="a4-page" id="plg1" style="padding:52px 52px;">
+        <div class="doc-title" style="font-size:25px; margin-bottom:30px;">평가위원 위촉승낙 및 서약서</div>
+        <div style="font-size:16px; line-height:1.9; margin-bottom:22px;">본인은 「<strong>${escapeHtml(evalConfig.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며 아래 사항에 서약합니다.</div>
+        <div style="font-size:15.5px; line-height:1.95; padding-left:8px;">
+          <p style="margin-bottom:14px;">1. 본인은 「${escapeHtml(evalConfig.project)}」 기술능력 평가위원회 위원으로 위촉된 이후, 위원회 활동과 관련하여 알게 된 사업의 중요사항을 제3자에게 누설하지 않는다.</p>
+          <p style="margin-bottom:14px;">2. 만약 실수로 인하여 기밀을 누설함으로써 위 용역사업에 손해를 끼친 경우에는 이의 없이 충분히 배상한다.</p>
+          <p style="margin-bottom:14px;">3. 본인은 개인의 이해관계와 관계없이 엄중 독립된 입장에서 평가위원회 위원의 역할을 성실히 수행한다.</p>
+          <p style="margin-bottom:14px;">4. 본인은 본 서약 내용의 확실한 준수를 약속하고 만약 이것을 위반했을 시에는 손해 배상은 물론이고, 관련 규정에 의거한 여하의 조치도 감수한다.</p>
         </div>
-        <div style="text-align:center; font-size:17px; margin-top:44px; margin-bottom:34px;">${escapeHtml(evalConfig.date)}</div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; font-size:17px; line-height:2.3; padding-right:16px;">
+        <div style="text-align:center; font-size:16.5px; margin-top:36px; margin-bottom:28px;">${escapeHtml(evalConfig.date)}</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; font-size:16.5px; line-height:2.2; padding-right:12px;">
           <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
-            <span style="position:relative; display:inline-block; width:220px; height:92px; text-align:right; line-height:92px;">
-              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:92px; max-width:220px;">
+            <span style="position:relative; display:inline-block; width:215px; height:88px; text-align:right; line-height:88px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:88px; max-width:215px;">
             </span>
           </div>
         </div>
-        <div style="text-align:center; font-size:23px; font-weight:700; margin-top:58px; letter-spacing:2px;">중소기업기술정보진흥원장 귀하</div>
+        <div style="text-align:center; font-size:22px; font-weight:700; margin-top:46px; letter-spacing:2px;">중소기업기술정보진흥원장 귀하</div>
       </div>
-      <div class="a4-page" id="plg2" style="padding:66px 56px;">
-        <div class="doc-title" style="font-size:27px; margin-bottom:32px;">평가위원 행동요령</div>
-        <div style="font-size:16.5px; line-height:1.9; margin-bottom:24px;">평가위원회의 공정성과 신뢰성을 담보하고 피평가자가 존중받는 문화를 조성하기 위하여 아래의 사항을 반드시 준수하여 주시기 바랍니다.</div>
-        <div style="font-size:16px; line-height:1.95; padding-left:8px;">
-          <p style="margin-bottom:16px;">1. (회의예절) 회의 중 휴대전화 벨소리를 진동으로 하고 빈번한 이석을 삼가해 주시며, 질문시간을 준수하여 다른 위원님이 발언할 수 있도록 형평을 기하여 주시기 바랍니다.</p>
-          <p style="margin-bottom:16px;">2. (정중한 대우) 피평가자(발표자)의 인격과 자존심이 손상되지 않도록 정중하면서도 정확하게 질의하며, 피평가자가 무시 또는 비난을 당하거나 취조당하는 느낌을 갖지 않도록 배려하여 주시기 바랍니다.</p>
-          <p style="margin-bottom:16px;">3. (표현기회제공) 피평가자에게 가급적 의사 표현의 기회가 제공될 수 있도록 하여 주시기 바랍니다.</p>
-          <p style="margin-bottom:16px;">4. (창의성 존중) 피평가자와 다른 의견을 제시할 경우 창의성이 존중되도록 논리적으로 설명하며, 피평가자와의 논쟁, 평가결과에 영향을 미치는 과도한 발언 및 개인적인 질문 등은 삼가주시기 바랍니다.</p>
-          <p style="margin-bottom:16px;">5. (비밀의 유지) 평가과정에서 알게 된 내용은 임의로 사용 또는 공개하지 않아야 하며, 평가결과에 대해서는 비밀을 유지하여 주시기 바랍니다.</p>
-          <p style="margin-bottom:16px;">6. (공정성 확보) 평가과제 중 자신과 이해관계에 있는 과제 등에 대해서는 평가가 불가함을 간사에게 알려 주시기 바랍니다.</p>
+      <div class="a4-page" id="plg2" style="padding:52px 52px;">
+        <div class="doc-title" style="font-size:25px; margin-bottom:28px;">평가위원 행동요령</div>
+        <div style="font-size:16px; line-height:1.85; margin-bottom:22px;">평가위원회의 공정성과 신뢰성을 담보하고 피평가자가 존중받는 문화를 조성하기 위하여 아래의 사항을 반드시 준수하여 주시기 바랍니다.</div>
+        <div style="font-size:15.5px; line-height:1.9; padding-left:6px;">
+          <p style="margin-bottom:14px;">1. (회의예절) 회의 중 휴대전화 벨소리를 진동으로 하고 빈번한 이석을 삼가해 주시며, 질문시간을 준수하여 다른 위원님이 발언할 수 있도록 형평을 기하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">2. (정중한 대우) 피평가자(발표자)의 인격과 자존심이 손상되지 않도록 정중하면서도 정확하게 질의하며, 피평가자가 무시 또는 비난을 당하거나 취조당하는 느낌을 갖지 않도록 배려하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">3. (표현기회제공) 피평가자에게 가급적 의사 표현의 기회가 제공될 수 있도록 하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">4. (창의성 존중) 피평가자와 다른 의견을 제시할 경우 창의성이 존중되도록 논리적으로 설명하며, 피평가자와의 논쟁, 평가결과에 영향을 미치는 과도한 발언 및 개인적인 질문 등은 삼가주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">5. (비밀의 유지) 평가과정에서 알게 된 내용은 임의로 사용 또는 공개하지 않아야 하며, 평가결과에 대해서는 비밀을 유지하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:14px;">6. (공정성 확보) 평가과제 중 자신과 이해관계에 있는 과제 등에 대해서는 평가가 불가함을 간사에게 알려 주시기 바랍니다.</p>
         </div>
       </div>`;
     const res = await renderElementsToBlob(['plg1', 'plg2']);
@@ -831,7 +869,6 @@
       const tsShort = `${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}) ${pad(now.getHours())}:${pad(now.getMinutes())}`;
       const ts = `서명일시 : ${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}), ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-      // 워터마크 텍스트 너비를 먼저 계산하여 캔버스 가로폭 자동 확장 (좌우 잘림 100% 방지)
       const wmHeight = 130;
       const fontSpec = '700 84px "Noto Sans KR", sans-serif';
       const measureCanvas = document.createElement('canvas');
