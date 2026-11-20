@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans KR', -apple-system, sans-serif; }
@@ -15,18 +16,18 @@
     .hidden { display: none !important; }
 
     /* 관리자 화면 레이아웃 */
-    .admin-wrap { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 410px 1fr; gap: 22px; }
-    @media (max-width: 980px) { .admin-wrap { grid-template-columns: 1fr; } }
-    .card { background: #fff; border-radius: 16px; padding: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow-x: auto; }
-    h2 { font-size: 21px; color: #0f172a; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
-    .fg { margin-bottom: 14px; }
-    label { display: block; font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 6px; }
-    input[type="text"], input[type="tel"], select {
-      width: 100%; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px;
-      font-size: 16.5px; background: #f8fafc; color: #0f172a;
+    .admin-wrap { max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: 380px 1fr; gap: 22px; }
+    @media (max-width: 1100px) { .admin-wrap { grid-template-columns: 1fr; } }
+    .card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow-x: auto; }
+    h2 { font-size: 20px; color: #0f172a; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
+    .fg { margin-bottom: 13px; }
+    label { display: block; font-size: 14.5px; font-weight: 700; color: #334155; margin-bottom: 5px; }
+    input[type="text"], input[type="tel"], input[type="number"], select {
+      width: 100%; padding: 11px 13px; border: 1px solid #cbd5e1; border-radius: 10px;
+      font-size: 16px; background: #f8fafc; color: #0f172a;
     }
     input:focus, select:focus { outline: none; border-color: #2563eb; background: #fff; }
-    .btn { width: 100%; padding: 15px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+    .btn { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 16.5px; font-weight: 700; cursor: pointer; margin-top: 6px; }
     .btn:hover { background: #1d4ed8; }
     .btn:disabled { background: #94a3b8; cursor: not-allowed; }
     .btn-close-window {
@@ -36,33 +37,46 @@
     }
     .btn-close-window:hover { background: #334155; }
     .btn-folder {
-      width: 100%; padding: 14px; background: #eff6ff; color: #1d4ed8; border: 1.5px dashed #2563eb;
-      border-radius: 10px; font-size: 15.5px; font-weight: 700; cursor: pointer; margin-bottom: 16px;
+      width: 100%; padding: 13px; background: #eff6ff; color: #1d4ed8; border: 1.5px dashed #2563eb;
+      border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 14px;
       display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.15s;
     }
     .btn-folder:hover { background: #dbeafe; }
-    .btn-sm { padding: 7px 12px; font-size: 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
+
+    /* 상단 엑셀 출력 및 액션 버튼 */
+    .btn-excel {
+      padding: 9px 15px; font-size: 14.5px; border-radius: 8px; border: none;
+      background: #15803d; color: #fff; font-weight: 700; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
+    }
+    .btn-excel:hover { background: #166534; }
+    .btn-excel:disabled { background: #cbd5e1; color: #64748b; cursor: not-allowed; }
+
+    .btn-sm { padding: 6px 10px; font-size: 13.5px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
+    .btn-doc-all { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .btn-doc-all:hover { background: #334155; }
     .btn-att { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
     .btn-att:hover { background: #dbeafe; }
     .btn-plg { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
     .btn-plg:hover { background: #dcfce7; }
 
     /* 버튼 한 줄 가로 정렬 전용 */
-    .btn-row-nowrap { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
+    .btn-row-nowrap { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; white-space: nowrap; }
 
     /* 접속 링크 + QR 패널 */
-    .link-panel { background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 18px; margin-top: 18px; text-align: center; }
-    .status-pill { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; background: #dcfce7; color: #166534; margin-bottom: 12px; }
-    .qr-box { display: inline-flex; justify-content: center; align-items: center; padding: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 12px; }
-    .link-box { padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; color: #1d4ed8; font-weight: 600; word-break: break-all; line-height: 1.5; user-select: all; text-align: left; }
-    .btn-copy { width: 100%; padding: 13px; margin-top: 12px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 15.5px; font-weight: 700; cursor: pointer; }
+    .link-panel { background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 16px; margin-top: 16px; text-align: center; }
+    .status-pill { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 13.5px; font-weight: 700; background: #dcfce7; color: #166534; margin-bottom: 10px; }
+    .qr-box { display: inline-flex; justify-content: center; align-items: center; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 10px; }
+    .link-box { padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13.5px; color: #1d4ed8; font-weight: 600; word-break: break-all; line-height: 1.45; user-select: all; text-align: left; }
+    .btn-copy { width: 100%; padding: 12px; margin-top: 10px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; }
     .btn-copy:hover { background: #334155; }
-    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; font-size: 14.5px; padding: 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.7; }
+    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; font-size: 14px; padding: 13px; border-radius: 10px; margin-bottom: 14px; line-height: 1.65; }
 
     /* 테이블 */
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 15px; }
-    th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 10px; text-align: left; vertical-align: middle; }
-    th { background: #f8fafc; color: #475569; font-weight: 700; white-space: nowrap; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14.5px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 12px 9px; text-align: center; vertical-align: middle; white-space: nowrap; }
+    th { background: #f8fafc; color: #475569; font-weight: 700; }
+    .sig-badge-ok { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: #dcfce7; color: #166534; }
 
     /* 평가위원 화면 (PC · 모바일 공용) */
     .attendee-wrap { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 28px 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
@@ -106,12 +120,18 @@
       <input type="text" id="cfgCommittee" value="(예시) 용역 기술능력평가위원회">
     </div>
     <div class="fg">
-      <label>평가일 (서류 및 파일명 반영)</label>
-      <input type="text" id="cfgDate" value="(예시) 2026년 11월 20일">
+      <label>평가일 (형식 무관 입력 시 0000-00-00(요일) 자동 변환)</label>
+      <input type="text" id="cfgDate" value="2026-11-20(금)" placeholder="예: 20261120 또는 2026.11.20" onblur="applyNormalizedDate()">
     </div>
-    <div class="fg">
-      <label>평가 장소</label>
-      <input type="text" id="cfgLocation" value="(예시) 수도권 평가장">
+    <div style="display:grid; grid-template-columns: 1fr 125px; gap:10px;">
+      <div class="fg">
+        <label>평가 장소</label>
+        <input type="text" id="cfgLocation" value="(예시) 수도권 평가장">
+      </div>
+      <div class="fg">
+        <label>목표 인원(명)</label>
+        <input type="number" id="cfgTargetCount" value="5" min="1" max="30" onchange="renderAttendeeTable()">
+      </div>
     </div>
 
     <button class="btn" id="initBtn" onclick="initAdminSession()">평가정보 반영 및 QR · 암호화 URL 생성</button>
@@ -129,28 +149,35 @@
   </div>
 
   <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:12px; margin-bottom:16px;">
-      <h2 style="border:none; margin:0; padding:0;">2. 실시간 PDF 자동 저장 및 웹 열람·인쇄</h2>
-      <span style="background:#dcfce7; color:#166534; font-size:14px; font-weight:700; padding:4px 11px; border-radius:999px;" id="cntBadge">0명 완료</span>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:1px solid #e2e8f0; padding-bottom:12px; margin-bottom:16px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <h2 style="border:none; margin:0; padding:0;">2. 실시간 서명 현황 및 서류·엑셀 출력</h2>
+        <span style="background:#eff6ff; color:#1d4ed8; font-size:14px; font-weight:700; padding:4px 12px; border-radius:999px;" id="cntBadge">0 / 5명 완료</span>
+      </div>
+      <button type="button" class="btn-excel" id="exportExcelBtn" onclick="exportToExcel()" disabled>
+        📊 정산용 엑셀(.xlsx) 출력하기
+      </button>
     </div>
 
-    <div class="info-box">
-      📂 <strong>저장 방식:</strong> 상단의 <strong>[PC 자동 저장 폴더 지정]</strong> 버튼으로 폴더를 선택해 두면 다운로드 팝업 없이 해당 폴더에 PDF 2종이 즉시 저장됩니다. (미지정 시 기본 다운로드 폴더 저장)<br>
-      🔐 <strong>보안 안내:</strong> 입력된 개인정보는 외부 서버에 저장되지 않고 <strong>AES-256 + DTLS</strong>로 암호화되어 간사 브라우저로만 직접 수신됩니다.
+    <div class="info-box" id="folderGuideBox">
+      📂 <strong>저장 위치:</strong> 상단 <strong>[PC 자동 저장 폴더 지정]</strong>으로 선택한 폴더에 평가위원별 PDF 2종이 자동 저장됩니다. (현재 지정 폴더: <span id="currentFolderLabel" style="font-weight:700; color:#1d4ed8;">기본 다운로드 폴더</span>)<br>
+      📊 <strong>엑셀 출력:</strong> 목표 인원(5명) 서명이 완료되면 상단의 <strong>[📊 정산용 엑셀(.xlsx) 출력하기]</strong> 버튼으로 전체 인적사항·주민번호·계좌내역을 한 번에 받을 수 있습니다.
     </div>
 
     <table>
       <thead>
         <tr>
-          <th style="width:52px;">순번</th>
-          <th>성명 (소속)</th>
-          <th>은행 / 계좌번호</th>
-          <th>서명</th>
-          <th style="width:350px;">PDF 바로보기 / 인쇄</th>
+          <th>이름</th>
+          <th>소속</th>
+          <th>주민번호</th>
+          <th>은행명</th>
+          <th>계좌번호</th>
+          <th>서명 여부</th>
+          <th>서류확인</th>
         </tr>
       </thead>
       <tbody id="attendeeTbody">
-        <tr><td colspan="5" style="text-align:center; padding:34px; color:#94a3b8;">평가정보 반영 후 QR코드 스캔 또는 URL 접속으로 평가위원이 서명하면 실시간으로 표시됩니다.</td></tr>
+        <tr><td colspan="7" style="text-align:center; padding:36px; color:#94a3b8;">평가정보 반영 후 QR코드 스캔 또는 URL 접속으로 평가위원이 서명하면 실시간으로 표시됩니다.</td></tr>
       </tbody>
     </table>
   </div>
@@ -252,6 +279,47 @@
   let isGeneratingPdf = false;
 
   // =========================================================================
+  // 평가일 자동 정규화 함수: 어떤 형식으로 입력해도 0000-00-00(요일)로 변환
+  // =========================================================================
+  function formatEvalDateWithDay(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+
+    let y = null, m = null, d = null;
+
+    const pureDigits = raw.replace(/[^0-9]/g, '');
+    if (/^\d{8}$/.test(pureDigits)) {
+      y = parseInt(pureDigits.slice(0, 4), 10);
+      m = parseInt(pureDigits.slice(4, 6), 10);
+      d = parseInt(pureDigits.slice(6, 8), 10);
+    } else {
+      const parts = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+      if (parts) {
+        y = parseInt(parts[1], 10);
+        m = parseInt(parts[2], 10);
+        d = parseInt(parts[3], 10);
+      }
+    }
+
+    if (y && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      const dt = new Date(y, m - 1, d);
+      if (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) {
+        const days = ['일', '월', '화', '수', '목', '금', '토'];
+        const pad = n => String(n).padStart(2, '0');
+        return `${y}-${pad(m)}-${pad(d)}(${days[dt.getDay()]})`;
+      }
+    }
+    return raw;
+  }
+
+  function applyNormalizedDate() {
+    const dateInput = document.getElementById('cfgDate');
+    if (dateInput) {
+      dateInput.value = formatEvalDateWithDay(dateInput.value);
+    }
+  }
+
+  // =========================================================================
   // AES-GCM 256비트 종단간 암호화 / 복호화 모듈 (Web Crypto API)
   // =========================================================================
   function generateRandomHexKey() {
@@ -310,6 +378,7 @@
     startAttendeeClient(hostPeerId, urlCryptoKeyHex);
   } else {
     document.getElementById('adminView').classList.remove('hidden');
+    applyNormalizedDate();
   }
 
   // 평가위원 창 종료 처리
@@ -340,6 +409,7 @@
     try {
       dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
       document.getElementById('folderBtnText').innerText = `✅ 저장 폴더 지정됨: [${dirHandle.name}]`;
+      document.getElementById('currentFolderLabel').innerText = dirHandle.name;
       document.getElementById('selectFolderBtn').style.borderColor = '#16a34a';
       document.getElementById('selectFolderBtn').style.background = '#f0fdf4';
       document.getElementById('selectFolderBtn').style.color = '#15803d';
@@ -387,6 +457,8 @@
   }
 
   function initAdminSession() {
+    applyNormalizedDate();
+
     evalConfig = {
       project: document.getElementById('cfgProject').value.trim(),
       committee: document.getElementById('cfgCommittee').value.trim(),
@@ -465,27 +537,123 @@
     }
   }
 
+  // 서류확인 버튼: 참석확인서 + 서약서 PDF 2종 동시 열람 및 저장 위치 안내
+  function openAttendeeDocs(idx) {
+    const a = attendees[idx];
+    if (!a) return;
+    if (a.attBlobUrl) window.open(a.attBlobUrl, '_blank');
+    if (a.pledgeBlobUrl) window.open(a.pledgeBlobUrl, '_blank');
+  }
+
   function renderAttendeeTable() {
-    document.getElementById('cntBadge').innerText = `${attendees.length}명 완료`;
+    const targetCnt = parseInt(document.getElementById('cfgTargetCount').value, 10) || 5;
+    const badge = document.getElementById('cntBadge');
+    const excelBtn = document.getElementById('exportExcelBtn');
+
+    badge.innerText = `${attendees.length} / ${targetCnt}명 완료`;
+    if (attendees.length >= targetCnt) {
+      badge.style.background = '#dcfce7';
+      badge.style.color = '#166534';
+      badge.innerText = `✅ ${attendees.length} / ${targetCnt}명 전원 완료`;
+    } else {
+      badge.style.background = '#eff6ff';
+      badge.style.color = '#1d4ed8';
+    }
+
+    // 1명 이상 접수되면 엑셀 출력 버튼 활성화
+    excelBtn.disabled = attendees.length === 0;
+
     const tbody = document.getElementById('attendeeTbody');
+    if (attendees.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:36px; color:#94a3b8;">평가정보 반영 후 QR코드 스캔 또는 URL 접속으로 평가위원이 서명하면 실시간으로 표시됩니다.</td></tr>`;
+      return;
+    }
+
     tbody.innerHTML = attendees.map((a, idx) => `
       <tr>
-        <td>${idx + 1}</td>
-        <td style="white-space:nowrap;"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.org)})</td>
-        <td style="white-space:nowrap;">${escapeHtml(a.bank)} / ${escapeHtml(a.account)}</td>
-        <td><img src="${a.signature}" style="height:48px; border:1px solid #e2e8f0; border-radius:4px; background:#fff;"></td>
+        <td><strong>${escapeHtml(a.name)}</strong></td>
+        <td>${escapeHtml(a.org)}</td>
+        <td>${escapeHtml(a.rrn)}</td>
+        <td>${escapeHtml(a.bank)}</td>
+        <td>${escapeHtml(a.account)}</td>
         <td>
-          <div class="btn-row-nowrap">
-            ${a.attBlobUrl
-              ? `<a href="${a.attBlobUrl}" target="_blank" class="btn-sm btn-att">📄 참석확인서 열기/인쇄</a>`
-              : `<span style="font-size:14px; color:#64748b;">생성 중...</span>`}
-            ${a.pledgeBlobUrl
-              ? `<a href="${a.pledgeBlobUrl}" target="_blank" class="btn-sm btn-plg">📄 서약서·행동강령 열기/인쇄</a>`
-              : ``}
+          <span class="sig-badge-ok">✔ 서명완료</span>
+          <div style="font-size:11.5px; color:#64748b; margin-top:2px;">${escapeHtml(a.signedTime || '')}</div>
+        </td>
+        <td>
+          <div class="btn-row-nowrap" style="justify-content:center;">
+            ${(a.attBlobUrl && a.pledgeBlobUrl)
+              ? `<button type="button" class="btn-sm btn-doc-all" onclick="openAttendeeDocs(${idx})">📂 서류 전체보기</button>
+                 <a href="${a.attBlobUrl}" target="_blank" class="btn-sm btn-att">참석확인서</a>
+                 <a href="${a.pledgeBlobUrl}" target="_blank" class="btn-sm btn-plg">서약서</a>`
+              : `<span style="font-size:13.5px; color:#64748b;">PDF 생성 중...</span>`}
           </div>
         </td>
       </tr>
     `).join('');
+  }
+
+  // =========================================================================
+  // 정산용 엑셀(.xlsx) 일괄 다운로드 기능
+  // =========================================================================
+  async function exportToExcel() {
+    if (attendees.length === 0) {
+      alert('서명 완료된 평가위원 데이터가 없습니다.');
+      return;
+    }
+
+    const targetCnt = parseInt(document.getElementById('cfgTargetCount').value, 10) || 5;
+    if (attendees.length < targetCnt) {
+      const ok = confirm(`현재 ${attendees.length}명만 서명이 완료되었습니다(목표 ${targetCnt}명).\n지금까지 접수된 인원만으로 엑셀 파일을 출력하시겠습니까?`);
+      if (!ok) return;
+    }
+
+    const rows = attendees.map((a, i) => ({
+      '순번': i + 1,
+      '사업명': evalConfig.project || '',
+      '위원회명': evalConfig.committee || '',
+      '평가일': evalConfig.date || '',
+      '평가장소': evalConfig.location || '',
+      '이름': a.name,
+      '소속': a.org,
+      '자택주소': a.address,
+      '주민등록번호': a.rrn,
+      '은행명': a.bank,
+      '계좌번호': a.account,
+      '소속기관 수령한도': a.limit || '-',
+      '서명 여부': '서명완료',
+      '전자서명 일시': a.signedTime || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 6 },  // 순번
+      { wch: 34 }, // 사업명
+      { wch: 24 }, // 위원회명
+      { wch: 16 }, // 평가일
+      { wch: 16 }, // 평가장소
+      { wch: 12 }, // 이름
+      { wch: 22 }, // 소속
+      { wch: 36 }, // 자택주소
+      { wch: 18 }, // 주민번호
+      { wch: 14 }, // 은행명
+      { wch: 20 }, // 계좌번호
+      { wch: 18 }, // 수령한도
+      { wch: 12 }, // 서명여부
+      { wch: 24 }  // 서명일시
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '평가위원_참석및계좌내역');
+
+    const clean = (str) => String(str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+    const excelFileName = `(평가위원정산내역)${clean(evalConfig.project)}_${clean(evalConfig.date)}_${attendees.length}명.xlsx`;
+
+    const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    await savePdfBlob(blob, excelFileName);
+    alert(`엑셀 파일이 생성되었습니다.\n파일명: ${excelFileName}`);
   }
 
   function buildCustomFileName(prefix, attendee) {
@@ -544,7 +712,6 @@
 
         <!-- 2단 구성 참석자 인적사항 및 서명 표 -->
         <table class="doc-table">
-          <!-- 1번째 라인: 성명 / 소속 / 자택주소 -->
           <tr style="height:36px;">
             <th style="width:18%;">성&nbsp;&nbsp;&nbsp;명</th>
             <th style="width:27%;">소&nbsp;&nbsp;&nbsp;속</th>
@@ -555,7 +722,6 @@
             <td>${escapeHtml(a.org)}</td>
             <td colspan="2" style="text-align:left; padding-left:12px;">${escapeHtml(a.address)}</td>
           </tr>
-          <!-- 2번째 라인: 주민번호 / 은행·계좌번호 / 소속기관 수령한도 / 서명 -->
           <tr style="height:40px;">
             <th style="width:18%;">주민등록번호</th>
             <th style="width:27%;">은행 / 계좌번호</th>
@@ -567,7 +733,7 @@
             <td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td>
             <td>${escapeHtml(a.limit || '-')}</td>
             <td style="padding:4px; background:#fff;">
-              <img src="${a.signature}" style="max-height:94px; max-width:230px; display:block; margin:0 auto;">
+              <img src="${a.signature}" style="max-height:94px; max-width:240px; display:block; margin:0 auto;">
             </td>
           </tr>
         </table>
@@ -596,8 +762,8 @@
           <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
-            <span style="position:relative; display:inline-block; width:210px; height:92px; text-align:right; line-height:92px;">
-              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:92px; max-width:210px;">
+            <span style="position:relative; display:inline-block; width:220px; height:92px; text-align:right; line-height:92px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:92px; max-width:220px;">
             </span>
           </div>
         </div>
@@ -662,28 +828,36 @@
       const pad = n => String(n).padStart(2, '0');
       const days = ['일', '월', '화', '수', '목', '금', '토'];
       const dayName = days[now.getDay()];
+      const tsShort = `${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}) ${pad(now.getHours())}:${pad(now.getMinutes())}`;
       const ts = `서명일시 : ${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}), ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-      // 워터마크 기존 대비 2배 확대 (폰트 84px, 영역 높이 130px) + 하얀 배경 + 회색 톤
+      // 워터마크 텍스트 너비를 먼저 계산하여 캔버스 가로폭 자동 확장 (좌우 잘림 100% 방지)
       const wmHeight = 130;
+      const fontSpec = '700 84px "Noto Sans KR", sans-serif';
+      const measureCanvas = document.createElement('canvas');
+      const mctx = measureCanvas.getContext('2d');
+      mctx.font = fontSpec;
+      const textWidth = Math.ceil(mctx.measureText(ts).width);
+
+      const finalWidth = Math.max(sigCanvas.width, textWidth + 60);
+      const finalHeight = sigCanvas.height + wmHeight;
+
       const out = document.createElement('canvas');
-      out.width = sigCanvas.width;
-      out.height = sigCanvas.height + wmHeight;
+      out.width = finalWidth;
+      out.height = finalHeight;
       const octx = out.getContext('2d');
 
-      // 전체 하얀 배경 채우기
       octx.fillStyle = '#ffffff';
-      octx.fillRect(0, 0, out.width, out.height);
+      octx.fillRect(0, 0, finalWidth, finalHeight);
 
-      // 서명 이미지 복사
-      octx.drawImage(sigCanvas, 0, 0);
+      const sigOffsetX = Math.floor((finalWidth - sigCanvas.width) / 2);
+      octx.drawImage(sigCanvas, sigOffsetX, 0);
 
-      // 워터마크 텍스트 (하얀 배경 + 회색 톤 + 2배 확대 폰트)
-      octx.font = '700 84px "Noto Sans KR", sans-serif';
-      octx.fillStyle = '#475569';
+      octx.font = fontSpec;
+      octx.fillStyle = '#64748b';
       octx.textAlign = 'center';
       octx.textBaseline = 'middle';
-      octx.fillText(ts, out.width / 2, sigCanvas.height + (wmHeight / 2));
+      octx.fillText(ts, finalWidth / 2, sigCanvas.height + (wmHeight / 2));
 
       const rawData = {
         name: document.getElementById('mName').value.trim(),
@@ -693,6 +867,7 @@
         bank: document.getElementById('mBank').value,
         account: document.getElementById('mAccount').value.trim(),
         limit: document.getElementById('mLimit').value.trim(),
+        signedTime: tsShort,
         signature: out.toDataURL('image/png')
       };
 
