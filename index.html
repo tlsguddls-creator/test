@@ -368,13 +368,110 @@
 
   function renderShareLinkAndQr(peerId) {
     const baseUrl = window.location.origin + window.location.pathname;
-    attendeeShareUrl = `${baseUrl}?host=${peerId}#key=${sessionSecretHex}`;  document.getElementById('linkSection').classList.remove('hidden'); document.getElementById('shareUrlText').innerText = attendeeShareUrl;  const qrContainer = document.getElementById('qrcode'); qrContainer.innerHTML = ''; new QRCode(qrContainer, { text: attendeeShareUrl, width: 200, height: 200, colorDark: '#0f172a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); }  function initAdminSession() { evalConfig = { project: document.getElementById('cfgProject').value.trim(), committee: document.getElementById('cfgCommittee').value.trim(), date: document.getElementById('cfgDate').value.trim(), location: document.getElementById('cfgLocation').value.trim() };  if (!sessionSecretHex) { sessionSecretHex = generateRandomHexKey(); }  if (!peer) { peer = new Peer(); peer.on('open', (id) => { currentPeerId = id; renderShareLinkAndQr(id); });  peer.on('connection', (conn) => { conn.on('open', () => { conn.send({ type: 'CONFIG', config: evalConfig }); });  conn.on('data', async (payload) => { if (payload.type === 'SUBMIT_ENC') { try { const att = await decryptPayload(payload.packet, sessionSecretHex); att.attBlobUrl = ''; att.pledgeBlobUrl = ''; attendees.push(att); const idx = attendees.length - 1; renderAttendeeTable(); conn.send({ type: 'ACK' });  const pledgeRes = await generatePledgePDF(idx); attendees[idx].pledgeBlobUrl = pledgeRes.blobUrl; await savePdfBlob(pledgeRes.blob, pledgeRes.filename);  setTimeout(async () => { const attRes = await generateAttendancePDF(idx); attendees[idx].attBlobUrl = attRes.blobUrl; await savePdfBlob(attRes.blob, attRes.filename); renderAttendeeTable(); }, 600); } catch (err) { alert('수신 데이터 복호화 오류가 발생했습니다. 최신 QR코드 또는 접속 URL인지 확인해 주세요.'); } } }); }); } else { if (currentPeerId) renderShareLinkAndQr(currentPeerId); alert('평가정보 및 QR코드·암호화 접속 URL이 업데이트되었습니다.'); } }  async function copyShareUrl() { if (!attendeeShareUrl) { alert('먼저 [평가정보 반영 및 QR · 암호화 URL 생성]을 눌러 주세요.'); return; }  try { await navigator.clipboard.writeText(attendeeShareUrl); alert('암호화 접속 URL이 클립보드에 복사되었습니다.'); } catch (e) { const ta = document.createElement('textarea'); ta.value = attendeeShareUrl; ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('암호화 접속 URL이 클립보드에 복사되었습니다.'); } }  function renderAttendeeTable() { document.getElementById('cntBadge').innerText = `${attendees.length}명 완료`;
+    attendeeShareUrl = `${baseUrl}?host=${peerId}#key=${sessionSecretHex}`;
+
+    document.getElementById('linkSection').classList.remove('hidden');
+    document.getElementById('shareUrlText').innerText = attendeeShareUrl;
+
+    const qrContainer = document.getElementById('qrcode');
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+      text: attendeeShareUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#0f172a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
+
+  function initAdminSession() {
+    evalConfig = {
+      project: document.getElementById('cfgProject').value.trim(),
+      committee: document.getElementById('cfgCommittee').value.trim(),
+      date: document.getElementById('cfgDate').value.trim(),
+      location: document.getElementById('cfgLocation').value.trim()
+    };
+
+    if (!sessionSecretHex) {
+      sessionSecretHex = generateRandomHexKey();
+    }
+
+    if (!peer) {
+      peer = new Peer();
+      peer.on('open', (id) => {
+        currentPeerId = id;
+        renderShareLinkAndQr(id);
+      });
+
+      peer.on('connection', (conn) => {
+        conn.on('open', () => {
+          conn.send({ type: 'CONFIG', config: evalConfig });
+        });
+
+        conn.on('data', async (payload) => {
+          if (payload.type === 'SUBMIT_ENC') {
+            try {
+              const att = await decryptPayload(payload.packet, sessionSecretHex);
+              att.attBlobUrl = '';
+              att.pledgeBlobUrl = '';
+              attendees.push(att);
+              const idx = attendees.length - 1;
+              renderAttendeeTable();
+              conn.send({ type: 'ACK' });
+
+              const pledgeRes = await generatePledgePDF(idx);
+              attendees[idx].pledgeBlobUrl = pledgeRes.blobUrl;
+              await savePdfBlob(pledgeRes.blob, pledgeRes.filename);
+
+              setTimeout(async () => {
+                const attRes = await generateAttendancePDF(idx);
+                attendees[idx].attBlobUrl = attRes.blobUrl;
+                await savePdfBlob(attRes.blob, attRes.filename);
+                renderAttendeeTable();
+              }, 600);
+            } catch (err) {
+              alert('수신 데이터 복호화 오류가 발생했습니다. 최신 QR코드 또는 접속 URL인지 확인해 주세요.');
+            }
+          }
+        });
+      });
+    } else {
+      if (currentPeerId) renderShareLinkAndQr(currentPeerId);
+      alert('평가정보 및 QR코드·암호화 접속 URL이 업데이트되었습니다.');
+    }
+  }
+
+  async function copyShareUrl() {
+    if (!attendeeShareUrl) {
+      alert('먼저 [평가정보 반영 및 QR · 암호화 URL 생성]을 눌러 주세요.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(attendeeShareUrl);
+      alert('암호화 접속 URL이 클립보드에 복사되었습니다.');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = attendeeShareUrl;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('암호화 접속 URL이 클립보드에 복사되었습니다.');
+    }
+  }
+
+  function renderAttendeeTable() {
+    document.getElementById('cntBadge').innerText = `${attendees.length}명 완료`;
     const tbody = document.getElementById('attendeeTbody');
     tbody.innerHTML = attendees.map((a, idx) => `
       <tr>
         <td>${idx + 1}</td>
         <td style="white-space:nowrap;"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.org)})</td>
-        <td style="white-space:nowrap;">${escapeHtml(a.bank)} /${escapeHtml(a.account)}</td>
+        <td style="white-space:nowrap;">${escapeHtml(a.bank)} / ${escapeHtml(a.account)}</td>
         <td><img src="${a.signature}" style="height:40px; border:1px solid #e2e8f0; border-radius:4px;"></td>
         <td>
           <div class="btn-row-nowrap">
@@ -427,4 +524,178 @@
           <tr><th style="width:50%; padding:9px;">개인정보 수집ㆍ이용</th><th style="width:50%; padding:9px;">고유식별정보 수집·이용</th></tr>
           <tr>
             <td style="text-align:left; vertical-align:top; padding:12px; line-height:1.7; font-size:13px;">
-              ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 성명, 은행
+              ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 성명, 은행 계좌번호, 주소<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
+              개인정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
+              <div style="margin-top:10px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+            </td>
+            <td style="text-align:left; vertical-align:top; padding:12px; line-height:1.7; font-size:13px;">
+              ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 주민등록번호<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
+              고유식별정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
+              <div style="margin-top:10px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+            </td>
+          </tr>
+        </table>
+        <div style="font-size:15.5px; font-weight:700; margin-bottom:5px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
+        <div style="font-size:12px; color:#333; margin-bottom:14px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
+        <table class="doc-table">
+          <thead>
+            <tr style="height:46px;">
+              <th style="width:10%;">성명</th><th style="width:14%;">소속</th><th style="width:22%;">자택주소</th>
+              <th style="width:15%;">주민번호</th><th style="width:16%;">은행/계좌번호</th><th style="width:9%;">소속기관<br>수령한도</th><th style="width:14%;">서명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="height:68px;">
+              <td><strong>${escapeHtml(a.name)}</strong></td><td>${escapeHtml(a.org)}</td><td style="text-align:left; font-size:12.5px;">${escapeHtml(a.address)}</td>
+              <td>${escapeHtml(a.rrn)}</td><td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td><td>${escapeHtml(a.limit || '-')}</td>
+              <td style="padding:4px;"><img src="${a.signature}" style="max-height:58px; max-width:96px; display:block; margin:0 auto;"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:12.5px; margin-top:12px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
+      </div>`;
+    const res = await renderElementsToBlob(['attTarget']);
+    return { ...res, filename: buildCustomFileName('참석확인서', a) };
+  }
+
+  async function generatePledgePDF(index) {
+    const a = attendees[index];
+    const staging = document.getElementById('printStaging');
+    staging.innerHTML = `
+      <div class="a4-page" id="plg1" style="padding:66px 56px;">
+        <div class="doc-title" style="font-size:27px; margin-bottom:36px;">평가위원 위촉승낙 및 서약서</div>
+        <div style="font-size:17px; line-height:1.95; margin-bottom:26px;">본인은 「<strong>${escapeHtml(evalConfig.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며 아래 사항에 서약합니다.</div>
+        <div style="font-size:16.5px; line-height:2.0; padding-left:10px;">
+          <p style="margin-bottom:16px;">1. 본인은 「${escapeHtml(evalConfig.project)}」 기술능력 평가위원회 위원으로 위촉된 이후, 위원회 활동과 관련하여 알게 된 사업의 중요사항을 제3자에게 누설하지 않는다.</p>
+          <p style="margin-bottom:16px;">2. 만약 실수로 인하여 기밀을 누설함으로써 위 용역사업에 손해를 끼친 경우에는 이의 없이 충분히 배상한다.</p>
+          <p style="margin-bottom:16px;">3. 본인은 개인의 이해관계와 관계없이 엄중 독립된 입장에서 평가위원회 위원의 역할을 성실히 수행한다.</p>
+          <p style="margin-bottom:16px;">4. 본인은 본 서약 내용의 확실한 준수를 약속하고 만약 이것을 위반했을 시에는 손해 배상은 물론이고, 관련 규정에 의거한 여하의 조치도 감수한다.</p>
+        </div>
+        <div style="text-align:center; font-size:17px; margin-top:44px; margin-bottom:34px;">${escapeHtml(evalConfig.date)}</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; font-size:17px; line-height:2.3; padding-right:16px;">
+          <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
+            <span style="position:relative; display:inline-block; width:125px; height:64px; text-align:right; line-height:64px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:64px; max-width:125px;">
+            </span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:23px; font-weight:700; margin-top:58px; letter-spacing:2px;">중소기업기술정보진흥원장 귀하</div>
+      </div>
+      <div class="a4-page" id="plg2" style="padding:66px 56px;">
+        <div class="doc-title" style="font-size:27px; margin-bottom:32px;">평가위원 행동요령</div>
+        <div style="font-size:16.5px; line-height:1.9; margin-bottom:24px;">평가위원회의 공정성과 신뢰성을 담보하고 피평가자가 존중받는 문화를 조성하기 위하여 아래의 사항을 반드시 준수하여 주시기 바랍니다.</div>
+        <div style="font-size:16px; line-height:1.95; padding-left:8px;">
+          <p style="margin-bottom:16px;">1. (회의예절) 회의 중 휴대전화 벨소리를 진동으로 하고 빈번한 이석을 삼가해 주시며, 질문시간을 준수하여 다른 위원님이 발언할 수 있도록 형평을 기하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:16px;">2. (정중한 대우) 피평가자(발표자)의 인격과 자존심이 손상되지 않도록 정중하면서도 정확하게 질의하며, 피평가자가 무시 또는 비난을 당하거나 취조당하는 느낌을 갖지 않도록 배려하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:16px;">3. (표현기회제공) 피평가자에게 가급적 의사 표현의 기회가 제공될 수 있도록 하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:16px;">4. (창의성 존중) 피평가자와 다른 의견을 제시할 경우 창의성이 존중되도록 논리적으로 설명하며, 피평가자와의 논쟁, 평가결과에 영향을 미치는 과도한 발언 및 개인적인 질문 등은 삼가주시기 바랍니다.</p>
+          <p style="margin-bottom:16px;">5. (비밀의 유지) 평가과정에서 알게 된 내용은 임의로 사용 또는 공개하지 않아야 하며, 평가결과에 대해서는 비밀을 유지하여 주시기 바랍니다.</p>
+          <p style="margin-bottom:16px;">6. (공정성 확보) 평가과제 중 자신과 이해관계에 있는 과제 등에 대해서는 평가가 불가함을 간사에게 알려 주시기 바랍니다.</p>
+        </div>
+      </div>`;
+    const res = await renderElementsToBlob(['plg1', 'plg2']);
+    return { ...res, filename: buildCustomFileName('서약서', a) };
+  }
+
+  let adminConn = null;
+
+  function startAttendeeClient(targetHostId, secretHex) {
+    peer = new Peer();
+    peer.on('open', () => {
+      adminConn = peer.connect(targetHostId);
+      adminConn.on('data', (msg) => {
+        if (msg.type === 'CONFIG') {
+          const c = msg.config;
+          document.getElementById('mHeaderInfo').innerHTML = `<strong>위원회:</strong> ${escapeHtml(c.committee)}<br><strong>일시/장소:</strong> ${escapeHtml(c.date)} / ${escapeHtml(c.location)}`;
+          document.getElementById('mPledgeSummary').innerHTML = `본인은 「<strong>${escapeHtml(c.project)}</strong>」 기술능력 평가위원회 위원으로 활동을 승낙하며, 기밀 유지·공정성 확보·행동요령 준수를 서약합니다.<label class="chk"><input type="checkbox" required> 위촉승낙 서약서 및 행동요령에 동의합니다. <span style="color:#ef4444;">*</span></label>`;
+          document.getElementById('attendeeLoading').classList.add('hidden');
+          document.getElementById('attendeeFormArea').classList.remove('hidden');
+          resizeSigCanvas();
+        } else if (msg.type === 'ACK') {
+          document.getElementById('attendeeFormArea').classList.add('hidden');
+          document.getElementById('attendeeDoneArea').classList.remove('hidden');
+        }
+      });
+    });
+
+    document.getElementById('mRrn').addEventListener('input', e => {
+      let v = e.target.value.replace(/[^0-9]/g, '');
+      e.target.value = v.length > 6 ? v.slice(0, 6) + '-' + v.slice(6, 13) : v;
+    });
+
+    document.getElementById('evalForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!hasSigned) { alert('서명란에 서명을 입력해 주세요.'); return; }
+      const btn = document.getElementById('mSubmitBtn');
+      btn.disabled = true;
+      btn.innerText = 'AES-256 암호화 및 전송 중...';
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+      // 출력 시에도 선명하게 인식되도록 워터마크 영역 및 폰트 크기 확대
+      const wmHeight = 56;
+      const out = document.createElement('canvas');
+      out.width = sigCanvas.width;
+      out.height = sigCanvas.height + wmHeight;
+      const octx = out.getContext('2d');
+      octx.drawImage(sigCanvas, 0, 0);
+
+      // 워터마크 배경 구분선 및 선명한 텍스트 합성
+      octx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+      octx.fillRect(0, sigCanvas.height, out.width, wmHeight);
+      octx.font = '700 36px "Noto Sans KR", sans-serif';
+      octx.fillStyle = '#1e293b';
+      octx.textAlign = 'center';
+      octx.textBaseline = 'middle';
+      octx.fillText(ts, out.width / 2, sigCanvas.height + (wmHeight / 2));
+
+      const rawData = {
+        name: document.getElementById('mName').value.trim(),
+        org: document.getElementById('mOrg').value.trim(),
+        address: document.getElementById('mAddress').value.trim(),
+        rrn: document.getElementById('mRrn').value.trim(),
+        bank: document.getElementById('mBank').value,
+        account: document.getElementById('mAccount').value.trim(),
+        limit: document.getElementById('mLimit').value.trim(),
+        signature: out.toDataURL('image/png')
+      };
+
+      const encryptedPacket = await encryptPayload(rawData, secretHex);
+      adminConn.send({ type: 'SUBMIT_ENC', packet: encryptedPacket });
+    });
+  }
+
+  const sigCanvas = document.getElementById('sigCanvas');
+  const sigCtx = sigCanvas.getContext('2d');
+  let isDrawing = false, hasSigned = false;
+
+  function resizeSigCanvas() {
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    sigCanvas.width = sigCanvas.offsetWidth * ratio;
+    sigCanvas.height = sigCanvas.offsetHeight * ratio;
+    sigCtx.scale(ratio, ratio);
+    sigCtx.lineWidth = 2.8;
+    sigCtx.lineCap = 'round';
+    sigCtx.strokeStyle = '#0f172a';
+  }
+  function getSigPos(e) {
+    const r = sigCanvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: cx - r.left, y: cy - r.top };
+  }
+  sigCanvas.addEventListener('mousedown', e => { isDrawing = true; hasSigned = true; const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+  sigCanvas.addEventListener('mousemove', e => { if (!isDrawing) return; const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+  window.addEventListener('mouseup', () => isDrawing = false);
+  sigCanvas.addEventListener('touchstart', e => { isDrawing = true; hasSigned = true; const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
+  sigCanvas.addEventListener('touchmove', e => { if (!isDrawing) return; e.preventDefault(); const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); }, { passive: false });
+  sigCanvas.addEventListener('touchend', () => isDrawing = false);
+  function clearSig() { sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height); hasSigned = false; }
+  function escapeHtml(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+</script>
+</body>
+</html>
