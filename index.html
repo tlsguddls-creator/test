@@ -77,10 +77,10 @@
 
     /* 숨겨진 PDF 렌더링 스테이지 */
     #printStaging { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; color: #000; }
-    .a4-page { width: 794px; min-height: 1122px; padding: 46px 48px; background: #fff; box-sizing: border-box; }
-    .doc-title { text-align: center; font-size: 25px; font-weight: 700; text-decoration: underline; margin-bottom: 22px; letter-spacing: 1px; }
-    .doc-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 13.5px; }
-    .doc-table th, .doc-table td { border: 1px solid #000; padding: 7px 6px; text-align: center; vertical-align: middle; }
+    .a4-page { width: 794px; min-height: 1122px; padding: 44px 48px; background: #fff; box-sizing: border-box; }
+    .doc-title { text-align: center; font-size: 25px; font-weight: 700; text-decoration: underline; margin-bottom: 20px; letter-spacing: 1px; }
+    .doc-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; font-size: 14px; }
+    .doc-table th, .doc-table td { border: 1px solid #000; padding: 8px 6px; text-align: center; vertical-align: middle; }
     .doc-table th { background: #f3f4f6; font-weight: 700; }
   </style>
 </head>
@@ -473,7 +473,7 @@
         <td>${idx + 1}</td>
         <td style="white-space:nowrap;"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.org)})</td>
         <td style="white-space:nowrap;">${escapeHtml(a.bank)} / ${escapeHtml(a.account)}</td>
-        <td><img src="${a.signature}" style="height:44px; border:1px solid #e2e8f0; border-radius:4px; background:#fff;"></td>
+        <td><img src="${a.signature}" style="height:48px; border:1px solid #e2e8f0; border-radius:4px; background:#fff;"></td>
         <td>
           <div class="btn-row-nowrap">
             ${a.attBlobUrl
@@ -512,48 +512,67 @@
     }
   }
 
+  // =========================================================================
+  // 참석확인서 PDF (2단 인적사항 표 구조: 1행 성명/소속/주소, 2행 주민번호/계좌/수령한도/서명)
+  // =========================================================================
   async function generateAttendancePDF(index) {
     const a = attendees[index];
     const staging = document.getElementById('printStaging');
     staging.innerHTML = `
       <div class="a4-page" id="attTarget">
         <div class="doc-title">개인정보 수집ㆍ이용 동의서</div>
-        <div style="font-size:15.5px; font-weight:700; line-height:1.85; margin-bottom:12px;">
+        <div style="font-size:15.5px; font-weight:700; line-height:1.85; margin-bottom:10px;">
           □ 위원회명 : ${escapeHtml(evalConfig.committee)}<br>□ 일&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;자 : ${escapeHtml(evalConfig.date)}
         </div>
-        <table class="doc-table" style="margin-bottom:16px;">
-          <tr><th style="width:50%; padding:9px;">개인정보 수집ㆍ이용</th><th style="width:50%; padding:9px;">고유식별정보 수집·이용</th></tr>
+        <table class="doc-table" style="margin-bottom:14px;">
+          <tr><th style="width:50%; padding:8px;">개인정보 수집ㆍ이용</th><th style="width:50%; padding:8px;">고유식별정보 수집·이용</th></tr>
           <tr>
-            <td style="text-align:left; vertical-align:top; padding:12px; line-height:1.7; font-size:13px;">
+            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:13px;">
               ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 성명, 은행 계좌번호, 주소<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
               개인정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
-              <div style="margin-top:10px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+              <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
             </td>
-            <td style="text-align:left; vertical-align:top; padding:12px; line-height:1.7; font-size:13px;">
+            <td style="text-align:left; vertical-align:top; padding:11px; line-height:1.65; font-size:13px;">
               ■ 수집·이용 목적 : 소득세법에 따른 참석자 자문료(평가수당) 지급<br>■ 수집·이용 항목 : 주민등록번호<br>■ 보유 및 이용기간 : 소득세법 등 관련법령에 따른 보유 후 파기<br><br>
               고유식별정보 수집 및 이용에 동의를 거부할 수 있으나, 미 동의시 회의 참석에 따른 자문료(평가수당) 등이 지급되지 않을 수 있습니다.<br>
-              <div style="margin-top:10px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
+              <div style="margin-top:8px; font-weight:700;">위 내용에 동의하십니까? &nbsp;&nbsp; ☑ 동의함 &nbsp;&nbsp; □ 동의하지 않음</div>
             </td>
           </tr>
         </table>
-        <div style="font-size:15.5px; font-weight:700; margin-bottom:5px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
-        <div style="font-size:12px; color:#333; margin-bottom:14px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
+        <div style="font-size:15.5px; font-weight:700; margin-bottom:4px;">□ 장&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;소 : ${escapeHtml(evalConfig.location)}</div>
+        <div style="font-size:12px; color:#333; margin-bottom:12px;">※ 주민등록번호는 「국세기본법」 제85조의3, 「소득세법」 제21조(기타소득), 제127조(원천징수의무), 제164조(지급명세서의 제출)에 근거하여 수집 및 이용</div>
+
+        <!-- 2단 구성 참석자 인적사항 및 서명 표 -->
         <table class="doc-table">
-          <thead>
-            <tr style="height:46px;">
-              <th style="width:9%;">성명</th><th style="width:13%;">소속</th><th style="width:21%;">자택주소</th>
-              <th style="width:14%;">주민번호</th><th style="width:16%;">은행/계좌번호</th><th style="width:9%;">소속기관<br>수령한도</th><th style="width:18%;">서명</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="height:76px;">
-              <td><strong>${escapeHtml(a.name)}</strong></td><td>${escapeHtml(a.org)}</td><td style="text-align:left; font-size:12.5px;">${escapeHtml(a.address)}</td>
-              <td>${escapeHtml(a.rrn)}</td><td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td><td>${escapeHtml(a.limit || '-')}</td>
-              <td style="padding:3px;"><img src="${a.signature}" style="max-height:68px; max-width:124px; display:block; margin:0 auto;"></td>
-            </tr>
-          </tbody>
+          <!-- 1번째 라인: 성명 / 소속 / 자택주소 -->
+          <tr style="height:36px;">
+            <th style="width:18%;">성&nbsp;&nbsp;&nbsp;명</th>
+            <th style="width:27%;">소&nbsp;&nbsp;&nbsp;속</th>
+            <th colspan="2" style="width:55%;">자&nbsp;택&nbsp;주&nbsp;소</th>
+          </tr>
+          <tr style="height:44px; font-size:14.5px;">
+            <td><strong>${escapeHtml(a.name)}</strong></td>
+            <td>${escapeHtml(a.org)}</td>
+            <td colspan="2" style="text-align:left; padding-left:12px;">${escapeHtml(a.address)}</td>
+          </tr>
+          <!-- 2번째 라인: 주민번호 / 은행·계좌번호 / 소속기관 수령한도 / 서명 -->
+          <tr style="height:40px;">
+            <th style="width:18%;">주민등록번호</th>
+            <th style="width:27%;">은행 / 계좌번호</th>
+            <th style="width:19%;">소속기관<br>수령한도</th>
+            <th style="width:36%;">서&nbsp;&nbsp;&nbsp;명</th>
+          </tr>
+          <tr style="height:105px; font-size:14.5px;">
+            <td>${escapeHtml(a.rrn)}</td>
+            <td>${escapeHtml(a.bank)}<br>${escapeHtml(a.account)}</td>
+            <td>${escapeHtml(a.limit || '-')}</td>
+            <td style="padding:4px; background:#fff;">
+              <img src="${a.signature}" style="max-height:94px; max-width:230px; display:block; margin:0 auto;">
+            </td>
+          </tr>
         </table>
-        <div style="font-size:12.5px; margin-top:12px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
+
+        <div style="font-size:12.5px; margin-top:10px;">* 소속기관의 수령한도가 중소기업기술정보진흥원 지급기준 보다 낮은 경우 수령한도를 표시(지급기준은 회의 담당자에게 문의)</div>
       </div>`;
     const res = await renderElementsToBlob(['attTarget']);
     return { ...res, filename: buildCustomFileName('참석확인서', a) };
@@ -577,8 +596,8 @@
           <div>소&nbsp;&nbsp;&nbsp;속 : &nbsp;<strong>${escapeHtml(a.org)}</strong></div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span>서약인 : &nbsp;<strong>${escapeHtml(a.name)}</strong></span>
-            <span style="position:relative; display:inline-block; width:150px; height:74px; text-align:right; line-height:74px;">
-              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:74px; max-width:150px;">
+            <span style="position:relative; display:inline-block; width:210px; height:92px; text-align:right; line-height:92px;">
+              (인)<img src="${a.signature}" style="position:absolute; right:0; top:0; height:92px; max-width:210px;">
             </span>
           </div>
         </div>
@@ -645,8 +664,8 @@
       const dayName = days[now.getDay()];
       const ts = `서명일시 : ${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}(${dayName}), ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-      // 하얀 배경에 회색 톤 큰 폰트로 워터마크 합성
-      const wmHeight = 72;
+      // 워터마크 기존 대비 2배 확대 (폰트 84px, 영역 높이 130px) + 하얀 배경 + 회색 톤
+      const wmHeight = 130;
       const out = document.createElement('canvas');
       out.width = sigCanvas.width;
       out.height = sigCanvas.height + wmHeight;
@@ -659,8 +678,8 @@
       // 서명 이미지 복사
       octx.drawImage(sigCanvas, 0, 0);
 
-      // 워터마크 텍스트 (하얀 배경 + 짙은 회색 톤 + 큰 폰트)
-      octx.font = '700 42px "Noto Sans KR", sans-serif';
+      // 워터마크 텍스트 (하얀 배경 + 회색 톤 + 2배 확대 폰트)
+      octx.font = '700 84px "Noto Sans KR", sans-serif';
       octx.fillStyle = '#475569';
       octx.textAlign = 'center';
       octx.textBaseline = 'middle';
